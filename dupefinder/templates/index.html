@@ -770,13 +770,13 @@
     
     <div class="container">
         <header>
-            <h1>ðŸ” Duplicate Image Finder</h1>
+            <h1>&#128269; Duplicate Image Finder</h1>
             <p>Find and manage duplicate images with ease</p>
         </header>
         
         <!-- Session Recovery Banner -->
         <div class="recovery-banner" id="recoveryBanner">
-            <h3>ðŸ“‚ Previous Session Found</h3>
+            <h3>&#128194; Previous Session Found</h3>
             <p id="recoveryInfo">You have results from a previous scan. Would you like to restore them?</p>
             <div class="btn-group">
                 <button class="btn btn-primary btn-sm" onclick="restoreSession()">Restore Session</button>
@@ -787,15 +787,15 @@
         <!-- Setup Panel -->
         <div class="setup-panel" id="setupPanel">
             <div class="form-group">
-                <label for="directory">ðŸ“ Directory to Scan</label>
-                <input type="text" id="directory" placeholder="Enter full path (e.g., C:\\Users\\Photos or /home/user/photos)" 
+                <label for="directory">&#128193; Directory to Scan</label>
+                <input type="text" id="directory" placeholder="Enter full path (e.g., C:\Users\Photos or /home/user/photos)" 
                        autocomplete="off" onfocus="showHistory()" oninput="filterHistory()">
                 <div class="autocomplete-list" id="historyList"></div>
             </div>
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="threshold">ðŸŽ¯ Similarity Threshold (0-64)</label>
+                    <label for="threshold">&#127919; Similarity Threshold (0-64)</label>
                     <input type="number" id="threshold" value="10" min="0" max="64">
                     <small style="color: #666; margin-top: 4px; display: block;">Lower = stricter matching. 10 is recommended.</small>
                 </div>
@@ -816,7 +816,7 @@
             </div>
             
             <button class="btn btn-primary" id="scanBtn" onclick="startScan()">
-                ðŸš€ Start Scan
+                &#128640; Start Scan
             </button>
             
             <div class="progress-container" id="progressContainer">
@@ -846,7 +846,7 @@
                 <div class="stat-label">Selected for Removal</div>
             </div>
             <div class="stat-item" style="margin-left: auto;">
-                <button class="btn btn-secondary btn-sm" onclick="newScan()">ðŸ”„ New Scan</button>
+                <button class="btn btn-secondary btn-sm" onclick="newScan()">&#128260; New Scan</button>
             </div>
         </div>
         
@@ -858,15 +858,15 @@
                 <option value="perceptual">Perceptual Matches Only</option>
             </select>
             <select id="sortBy" onchange="applyFilters()">
-                <option value="savings">Sort by Savings (High â†’ Low)</option>
+                <option value="savings">Sort by Savings (High to Low)</option>
                 <option value="count">Sort by Image Count</option>
                 <option value="id">Sort by Group ID</option>
             </select>
             <input type="text" id="searchFilter" placeholder="Search by filename..." oninput="applyFilters()">
             <div class="pagination">
-                <button onclick="prevPage()" id="prevBtn">â† Prev</button>
+                <button onclick="prevPage()" id="prevBtn">&larr; Prev</button>
                 <span id="pageInfo">Page 1 of 1</span>
-                <button onclick="nextPage()" id="nextBtn">Next â†’</button>
+                <button onclick="nextPage()" id="nextBtn">Next &rarr;</button>
             </div>
         </div>
         
@@ -881,8 +881,8 @@
             </div>
             <div class="action-buttons">
                 <button class="btn btn-secondary" onclick="resetSelections()">Reset All</button>
-                <button class="btn btn-secondary" onclick="exportSelections()">ðŸ“‹ Export List</button>
-                <button class="btn btn-danger" onclick="showDeleteModal()">ðŸ—‘ï¸ Move to Trash</button>
+                <button class="btn btn-secondary" onclick="exportSelections()">&#128203; Export List</button>
+                <button class="btn btn-danger" onclick="showDeleteModal()">&#128465; Move to Trash</button>
             </div>
         </div>
     </div>
@@ -896,11 +896,11 @@
     <!-- Delete Confirmation Modal -->
     <div class="modal-overlay" id="deleteModal">
         <div class="modal">
-            <h2>âš ï¸ Confirm Deletion</h2>
+            <h2>&#9888; Confirm Deletion</h2>
             <p id="deleteModalText">Are you sure you want to move X files to the trash folder?</p>
             <div class="form-group">
                 <label for="trashDir">Trash Directory</label>
-                <input type="text" id="trashDir" placeholder="e.g., C:\\Duplicates_Trash">
+                <input type="text" id="trashDir" placeholder="e.g., C:\Duplicates_Trash">
             </div>
             <div class="modal-buttons">
                 <button class="btn btn-secondary" onclick="hideDeleteModal()">Cancel</button>
@@ -912,15 +912,15 @@
     <!-- Lightbox -->
     <div class="lightbox" id="lightbox">
         <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
-        <button class="lightbox-nav prev" onclick="lightboxPrev(event)">â€¹</button>
+        <button class="lightbox-nav prev" onclick="lightboxPrev(event)">&lsaquo;</button>
         <img id="lightboxImg" src="" alt="">
-        <button class="lightbox-nav next" onclick="lightboxNext(event)">â€º</button>
+        <button class="lightbox-nav next" onclick="lightboxNext(event)">&rsaquo;</button>
     </div>
     
     <!-- Keyboard Help -->
     <div class="keyboard-help" id="keyboardHelp">
-        <kbd>â†‘</kbd><kbd>â†“</kbd> Navigate groups &nbsp;
-        <kbd>â†</kbd><kbd>â†’</kbd> Select image &nbsp;
+        <kbd>&uarr;</kbd><kbd>&darr;</kbd> Navigate groups &nbsp;
+        <kbd>&larr;</kbd><kbd>&rarr;</kbd> Select image &nbsp;
         <kbd>Space</kbd> Toggle keep &nbsp;
         <kbd>Z</kbd> Undo
     </div>
@@ -1237,7 +1237,7 @@
             if (filteredGroups.length === 0) {
                 container.innerHTML = `
                     <div class="no-results">
-                        <h2>âœ¨ No Duplicates Found!</h2>
+                        <h2>&#10024; No Duplicates Found!</h2>
                         <p>Your image collection is clean, or no matches for current filters.</p>
                     </div>
                 `;
@@ -1273,8 +1273,8 @@
                                          onerror="this.classList.add('error'); this.alt='Failed to load'"
                                          ondblclick="event.stopPropagation(); openLightbox(${group.id}, ${idx})">
                                     ${selections[img.path] === 'keep' 
-                                        ? '<div class="keep-badge">âœ“ KEEP</div>' 
-                                        : '<div class="delete-badge">âœ— DELETE</div>'}
+                                        ? '<div class="keep-badge">&#10004; KEEP</div>' 
+                                        : '<div class="delete-badge">&#10007; DELETE</div>'}
                                 </div>
                                 <div class="image-info">
                                     <div class="image-filename">${escapeHtml(img.filename)}</div>
@@ -1432,7 +1432,7 @@
                 lines.push('');
             });
             
-            const blob = new Blob([lines.join('\\n')], { type: 'text/plain' });
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -1484,7 +1484,7 @@
             .then(r => r.json())
             .then(data => {
                 hideDeleteModal();
-                alert(`Moved ${data.moved} files to trash.\\n${data.errors} errors.`);
+                alert(`Moved ${data.moved} files to trash.\n${data.errors} errors.`);
                 
                 // Remove deleted files from groups
                 groups.forEach(g => {
@@ -1591,7 +1591,7 @@
         }
         
         function escapeJs(str) {
-            return str.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'");
+            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         }
     </script>
 </body>
