@@ -1,0 +1,71 @@
+"""
+Setup script for Duplicate Image Finder package.
+
+Install with:
+    pip install -e .
+
+Or build distribution:
+    python setup.py sdist bdist_wheel
+"""
+
+from setuptools import setup, find_packages
+from pathlib import Path
+
+# Read README for long description
+readme_path = Path(__file__).parent / "README.md"
+long_description = ""
+if readme_path.exists():
+    long_description = readme_path.read_text(encoding="utf-8")
+
+setup(
+    name="dupefinder",
+    version="1.0.0",
+    author="Zach Daly",
+    description="A comprehensive tool for finding duplicate and visually similar images",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/yourusername/dupefinder",
+    packages=find_packages(),
+    include_package_data=True,
+    package_data={
+        "dupefinder": ["templates/*.html"],
+    },
+    python_requires=">=3.9",
+    install_requires=[
+        "Pillow>=9.0.0",
+        "imagehash>=4.0.0",
+        "flask>=2.0.0",
+    ],
+    extras_require={
+        "dev": [
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
+        ],
+        "progress": [
+            "tqdm>=4.0.0",
+        ],
+    },
+    entry_points={
+        "console_scripts": [
+            "dupefinder=dupefinder.__main__:main",
+            "dupefinder-cli=dupefinder.cli:main",
+            "dupefinder-gui=dupefinder.app:main",
+        ],
+    },
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Environment :: Console",
+        "Environment :: Web Environment",
+        "Intended Audience :: End Users/Desktop",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Multimedia :: Graphics",
+        "Topic :: Utilities",
+    ],
+    keywords="duplicate image finder photo dedup hash perceptual",
+)

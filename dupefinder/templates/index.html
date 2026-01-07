@@ -1,0 +1,1598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duplicate Image Finder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 1px solid #333;
+            margin-bottom: 30px;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            color: #fff;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            color: #888;
+            font-size: 1.1rem;
+        }
+        
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .connection-status.connected {
+            background: rgba(39, 174, 96, 0.2);
+            color: #27ae60;
+        }
+        
+        .connection-status.disconnected {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+        
+        .connection-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+        
+        /* Session Recovery Banner */
+        .recovery-banner {
+            background: linear-gradient(135deg, #2d3436, #1a1a2e);
+            border: 1px solid #4a9eff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .recovery-banner.active {
+            display: block;
+        }
+        
+        .recovery-banner h3 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+        
+        .recovery-banner p {
+            color: #888;
+            margin-bottom: 15px;
+        }
+        
+        .recovery-banner .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        /* Setup Panel */
+        .setup-panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #ccc;
+        }
+        
+        .form-group input[type="text"],
+        .form-group input[type="number"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #0f0f23;
+            color: #fff;
+            font-size: 1rem;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+        
+        /* Directory Autocomplete */
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #0f0f23;
+            border: 2px solid #333;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        
+        .autocomplete-list.active {
+            display: block;
+        }
+        
+        .autocomplete-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #333;
+        }
+        
+        .autocomplete-item:hover {
+            background: #1a1a3e;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4a9eff, #6c5ce7);
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(74, 158, 255, 0.4);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: #fff;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+            color: #fff;
+        }
+        
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+        
+        /* Progress */
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .progress-container.active {
+            display: block;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4a9eff, #6c5ce7);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .progress-text {
+            color: #888;
+            font-size: 0.9rem;
+        }
+        
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #16213e;
+            border-radius: 12px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 10px 20px;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #4a9eff;
+        }
+        
+        .stat-label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-top: 4px;
+        }
+        
+        /* Filter/Sort Bar */
+        .filter-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .filter-bar select {
+            padding: 10px 15px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #0f0f23;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+        
+        .filter-bar input[type="text"] {
+            padding: 10px 15px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #0f0f23;
+            color: #fff;
+            font-size: 0.9rem;
+            width: 200px;
+        }
+        
+        .pagination {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-left: auto;
+        }
+        
+        .pagination button {
+            padding: 8px 16px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #0f0f23;
+            color: #fff;
+            cursor: pointer;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .pagination span {
+            color: #888;
+        }
+        
+        /* Groups */
+        .groups-container {
+            display: none;
+        }
+        
+        .groups-container.active {
+            display: block;
+        }
+        
+        .group-card {
+            background: #16213e;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        
+        .group-card.focused {
+            box-shadow: 0 0 0 3px #4a9eff;
+        }
+        
+        .group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: #1a1a3e;
+            border-bottom: 1px solid #333;
+        }
+        
+        .group-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .group-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .group-badge.exact {
+            background: #e74c3c;
+        }
+        
+        .group-badge.perceptual {
+            background: #f39c12;
+        }
+        
+        .group-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        
+        .image-card {
+            background: #0f0f23;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 3px solid transparent;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .image-card:hover {
+            border-color: #4a9eff;
+        }
+        
+        .image-card.selected {
+            border-color: #27ae60;
+            box-shadow: 0 0 20px rgba(39, 174, 96, 0.3);
+        }
+        
+        .image-card.to-delete {
+            border-color: #e74c3c;
+            opacity: 0.7;
+        }
+        
+        .image-card.keyboard-focus {
+            outline: 3px dashed #f39c12;
+            outline-offset: 3px;
+        }
+        
+        .image-preview {
+            width: 100%;
+            height: 200px;
+            object-fit: contain;
+            background: #000;
+        }
+        
+        .image-preview.error {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e74c3c;
+            font-size: 0.9rem;
+        }
+        
+        .image-info {
+            padding: 15px;
+        }
+        
+        .image-filename {
+            font-weight: 600;
+            margin-bottom: 8px;
+            word-break: break-all;
+            font-size: 0.95rem;
+        }
+        
+        .image-path {
+            font-size: 0.75rem;
+            color: #666;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+        
+        .image-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+        
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .meta-label {
+            color: #888;
+        }
+        
+        .meta-value {
+            color: #fff;
+            font-weight: 500;
+        }
+        
+        .quality-score {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #333;
+        }
+        
+        .quality-bar {
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+        
+        .quality-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e74c3c, #f39c12, #27ae60);
+            border-radius: 3px;
+        }
+        
+        .image-actions {
+            padding: 10px 15px;
+            background: #1a1a3e;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .image-actions .btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.85rem;
+        }
+        
+        .keep-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #27ae60;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .delete-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .image-wrapper {
+            position: relative;
+        }
+        
+        /* Action Bar */
+        .action-bar {
+            position: sticky;
+            bottom: 0;
+            background: #16213e;
+            border-top: 1px solid #333;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            z-index: 100;
+        }
+        
+        .action-summary {
+            font-size: 1rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        /* Undo Toast */
+        .undo-toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 1001;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .undo-toast.active {
+            display: flex;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .modal h2 {
+            margin-bottom: 15px;
+        }
+        
+        .modal p {
+            color: #888;
+            margin-bottom: 20px;
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
+        /* Lightbox */
+        .lightbox {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1001;
+        }
+        
+        .lightbox.active {
+            display: flex;
+        }
+        
+        .lightbox img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+        
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 3rem;
+            color: #fff;
+            cursor: pointer;
+            background: rgba(0,0,0,0.5);
+            border: none;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .lightbox-nav.prev { left: 20px; }
+        .lightbox-nav.next { right: 20px; }
+        
+        /* No Results */
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        
+        .no-results h2 {
+            color: #27ae60;
+            margin-bottom: 10px;
+        }
+        
+        /* Keyboard Shortcuts Help */
+        .keyboard-help {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: #16213e;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #888;
+            z-index: 50;
+        }
+        
+        .keyboard-help kbd {
+            background: #333;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #fff;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                flex-direction: column;
+            }
+            
+            .stats-bar {
+                justify-content: center;
+            }
+            
+            .action-bar {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .keyboard-help {
+                display: none;
+            }
+            
+            .filter-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .pagination {
+                margin-left: 0;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Status -->
+    <div class="connection-status connected" id="connectionStatus">
+        <span class="dot"></span>
+        <span id="connectionText">Connected</span>
+    </div>
+    
+    <div class="container">
+        <header>
+            <h1>ðŸ” Duplicate Image Finder</h1>
+            <p>Find and manage duplicate images with ease</p>
+        </header>
+        
+        <!-- Session Recovery Banner -->
+        <div class="recovery-banner" id="recoveryBanner">
+            <h3>ðŸ“‚ Previous Session Found</h3>
+            <p id="recoveryInfo">You have results from a previous scan. Would you like to restore them?</p>
+            <div class="btn-group">
+                <button class="btn btn-primary btn-sm" onclick="restoreSession()">Restore Session</button>
+                <button class="btn btn-secondary btn-sm" onclick="dismissRecovery()">Start Fresh</button>
+            </div>
+        </div>
+        
+        <!-- Setup Panel -->
+        <div class="setup-panel" id="setupPanel">
+            <div class="form-group">
+                <label for="directory">ðŸ“ Directory to Scan</label>
+                <input type="text" id="directory" placeholder="Enter full path (e.g., C:\\Users\\Photos or /home/user/photos)" 
+                       autocomplete="off" onfocus="showHistory()" oninput="filterHistory()">
+                <div class="autocomplete-list" id="historyList"></div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="threshold">ðŸŽ¯ Similarity Threshold (0-64)</label>
+                    <input type="number" id="threshold" value="10" min="0" max="64">
+                    <small style="color: #666; margin-top: 4px; display: block;">Lower = stricter matching. 10 is recommended.</small>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label>Detection Mode</label>
+                <div class="checkbox-group">
+                    <label>
+                        <input type="checkbox" id="exactOnly">
+                        Exact matches only (fastest)
+                    </label>
+                    <label>
+                        <input type="checkbox" id="perceptualOnly">
+                        Perceptual matches only
+                    </label>
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" id="scanBtn" onclick="startScan()">
+                ðŸš€ Start Scan
+            </button>
+            
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Initializing...</div>
+            </div>
+        </div>
+        
+        <!-- Stats Bar -->
+        <div class="stats-bar" id="statsBar" style="display: none;">
+            <div class="stat-item">
+                <div class="stat-value" id="statGroups">0</div>
+                <div class="stat-label">Duplicate Groups</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statDupes">0</div>
+                <div class="stat-label">Total Duplicates</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statSavings">0 MB</div>
+                <div class="stat-label">Potential Savings</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statSelected">0</div>
+                <div class="stat-label">Selected for Removal</div>
+            </div>
+            <div class="stat-item" style="margin-left: auto;">
+                <button class="btn btn-secondary btn-sm" onclick="newScan()">ðŸ”„ New Scan</button>
+            </div>
+        </div>
+        
+        <!-- Filter Bar -->
+        <div class="filter-bar" id="filterBar" style="display: none;">
+            <select id="filterType" onchange="applyFilters()">
+                <option value="all">All Groups</option>
+                <option value="exact">Exact Matches Only</option>
+                <option value="perceptual">Perceptual Matches Only</option>
+            </select>
+            <select id="sortBy" onchange="applyFilters()">
+                <option value="savings">Sort by Savings (High â†’ Low)</option>
+                <option value="count">Sort by Image Count</option>
+                <option value="id">Sort by Group ID</option>
+            </select>
+            <input type="text" id="searchFilter" placeholder="Search by filename..." oninput="applyFilters()">
+            <div class="pagination">
+                <button onclick="prevPage()" id="prevBtn">â† Prev</button>
+                <span id="pageInfo">Page 1 of 1</span>
+                <button onclick="nextPage()" id="nextBtn">Next â†’</button>
+            </div>
+        </div>
+        
+        <!-- Groups Container -->
+        <div class="groups-container" id="groupsContainer"></div>
+        
+        <!-- Action Bar -->
+        <div class="action-bar" id="actionBar" style="display: none;">
+            <div class="action-summary">
+                <strong id="actionSummary">0 files selected for removal</strong>
+                <span id="actionSavings" style="color: #888; margin-left: 10px;"></span>
+            </div>
+            <div class="action-buttons">
+                <button class="btn btn-secondary" onclick="resetSelections()">Reset All</button>
+                <button class="btn btn-secondary" onclick="exportSelections()">ðŸ“‹ Export List</button>
+                <button class="btn btn-danger" onclick="showDeleteModal()">ðŸ—‘ï¸ Move to Trash</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Undo Toast -->
+    <div class="undo-toast" id="undoToast">
+        <span id="undoMessage">Selection changed</span>
+        <button class="btn btn-sm btn-primary" onclick="undoAction()">Undo</button>
+    </div>
+    
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal">
+            <h2>âš ï¸ Confirm Deletion</h2>
+            <p id="deleteModalText">Are you sure you want to move X files to the trash folder?</p>
+            <div class="form-group">
+                <label for="trashDir">Trash Directory</label>
+                <input type="text" id="trashDir" placeholder="e.g., C:\\Duplicates_Trash">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="hideDeleteModal()">Cancel</button>
+                <button class="btn btn-danger" onclick="executeDelete()">Move to Trash</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+        <button class="lightbox-nav prev" onclick="lightboxPrev(event)">â€¹</button>
+        <img id="lightboxImg" src="" alt="">
+        <button class="lightbox-nav next" onclick="lightboxNext(event)">â€º</button>
+    </div>
+    
+    <!-- Keyboard Help -->
+    <div class="keyboard-help" id="keyboardHelp">
+        <kbd>â†‘</kbd><kbd>â†“</kbd> Navigate groups &nbsp;
+        <kbd>â†</kbd><kbd>â†’</kbd> Select image &nbsp;
+        <kbd>Space</kbd> Toggle keep &nbsp;
+        <kbd>Z</kbd> Undo
+    </div>
+    
+    <script>
+        // =============================================================
+        // State
+        // =============================================================
+        let scanInterval = null;
+        let groups = [];
+        let filteredGroups = [];
+        let selections = {};
+        let undoStack = [];
+        let directoryHistory = [];
+        let currentPage = 1;
+        const PAGE_SIZE = 10;
+        let focusedGroupIndex = -1;
+        let focusedImageIndex = -1;
+        let lightboxImages = [];
+        let lightboxIndex = 0;
+        let lastPollTime = Date.now();
+        let connectionLost = false;
+        
+        // =============================================================
+        // Initialization
+        // =============================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            checkForRecovery();
+            loadDirectoryHistory();
+            startConnectionMonitor();
+        });
+        
+        function checkForRecovery() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'complete' && data.has_results) {
+                        document.getElementById('recoveryBanner').classList.add('active');
+                        document.getElementById('recoveryInfo').textContent = 
+                            `Found ${data.group_count} duplicate groups from: ${data.directory}`;
+                    }
+                });
+        }
+        
+        function restoreSession() {
+            document.getElementById('recoveryBanner').classList.remove('active');
+            loadResults();
+        }
+        
+        function dismissRecovery() {
+            document.getElementById('recoveryBanner').classList.remove('active');
+            fetch('/api/clear', { method: 'POST' });
+        }
+        
+        function loadDirectoryHistory() {
+            fetch('/api/history')
+                .then(r => r.json())
+                .then(data => {
+                    directoryHistory = data.directories || [];
+                });
+        }
+        
+        // =============================================================
+        // Connection Monitoring
+        // =============================================================
+        function startConnectionMonitor() {
+            setInterval(() => {
+                fetch('/api/ping')
+                    .then(r => {
+                        if (r.ok) {
+                            if (connectionLost) {
+                                connectionLost = false;
+                                updateConnectionStatus(true);
+                                // Reload state if we were in the middle of something
+                                if (scanInterval) {
+                                    // Continue polling
+                                }
+                            }
+                            lastPollTime = Date.now();
+                        }
+                    })
+                    .catch(() => {
+                        connectionLost = true;
+                        updateConnectionStatus(false);
+                    });
+            }, 5000);
+        }
+        
+        function updateConnectionStatus(connected) {
+            const el = document.getElementById('connectionStatus');
+            const text = document.getElementById('connectionText');
+            if (connected) {
+                el.className = 'connection-status connected';
+                text.textContent = 'Connected';
+            } else {
+                el.className = 'connection-status disconnected';
+                text.textContent = 'Disconnected - Retrying...';
+            }
+        }
+        
+        // Handle page visibility (tab sleeping)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && scanInterval) {
+                // Page became visible again, check status immediately
+                checkProgress();
+            }
+        });
+        
+        // =============================================================
+        // Directory History/Autocomplete
+        // =============================================================
+        function showHistory() {
+            renderHistory(directoryHistory);
+        }
+        
+        function filterHistory() {
+            const input = document.getElementById('directory').value.toLowerCase();
+            const filtered = directoryHistory.filter(d => d.toLowerCase().includes(input));
+            renderHistory(filtered);
+        }
+        
+        function renderHistory(dirs) {
+            const list = document.getElementById('historyList');
+            if (dirs.length === 0) {
+                list.classList.remove('active');
+                return;
+            }
+            list.innerHTML = dirs.map(d => 
+                `<div class="autocomplete-item" onclick="selectDirectory('${escapeJs(d)}')">${escapeHtml(d)}</div>`
+            ).join('');
+            list.classList.add('active');
+        }
+        
+        function selectDirectory(dir) {
+            document.getElementById('directory').value = dir;
+            document.getElementById('historyList').classList.remove('active');
+        }
+        
+        // Hide autocomplete when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.form-group')) {
+                document.getElementById('historyList').classList.remove('active');
+            }
+        });
+        
+        // =============================================================
+        // Scanning
+        // =============================================================
+        function startScan() {
+            const directory = document.getElementById('directory').value.trim();
+            if (!directory) {
+                alert('Please enter a directory path');
+                return;
+            }
+            
+            const threshold = parseInt(document.getElementById('threshold').value) || 10;
+            const exactOnly = document.getElementById('exactOnly').checked;
+            const perceptualOnly = document.getElementById('perceptualOnly').checked;
+            
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('progressContainer').classList.add('active');
+            document.getElementById('groupsContainer').classList.remove('active');
+            document.getElementById('statsBar').style.display = 'none';
+            document.getElementById('actionBar').style.display = 'none';
+            document.getElementById('filterBar').style.display = 'none';
+            
+            fetch('/api/scan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({directory, threshold, exactOnly, perceptualOnly})
+            });
+            
+            scanInterval = setInterval(checkProgress, 500);
+        }
+        
+        function checkProgress() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('progressFill').style.width = data.progress + '%';
+                    document.getElementById('progressText').textContent = data.message;
+                    
+                    if (data.status === 'complete' || data.status === 'error') {
+                        clearInterval(scanInterval);
+                        scanInterval = null;
+                        document.getElementById('scanBtn').disabled = false;
+                        
+                        if (data.status === 'complete') {
+                            loadResults();
+                        } else {
+                            alert('Scan error: ' + data.message);
+                        }
+                    }
+                })
+                .catch(() => {
+                    // Connection issue - will retry via connection monitor
+                });
+        }
+        
+        function loadResults() {
+            fetch('/api/groups')
+                .then(r => r.json())
+                .then(data => {
+                    groups = data.groups;
+                    selections = data.selections || {};
+                    
+                    // If no selections yet, auto-select: keep best, delete rest
+                    if (Object.keys(selections).length === 0) {
+                        groups.forEach(g => {
+                            g.images.forEach((img, idx) => {
+                                selections[img.path] = idx === 0 ? 'keep' : 'delete';
+                            });
+                        });
+                    }
+                    
+                    // Update directory history
+                    if (data.directory && !directoryHistory.includes(data.directory)) {
+                        directoryHistory.unshift(data.directory);
+                        directoryHistory = directoryHistory.slice(0, 10);
+                    }
+                    
+                    currentPage = 1;
+                    applyFilters();
+                    updateStats();
+                    
+                    document.getElementById('progressContainer').classList.remove('active');
+                    document.getElementById('groupsContainer').classList.add('active');
+                    document.getElementById('statsBar').style.display = 'flex';
+                    document.getElementById('filterBar').style.display = 'flex';
+                    
+                    if (groups.length > 0) {
+                        document.getElementById('actionBar').style.display = 'flex';
+                    }
+                });
+        }
+        
+        function newScan() {
+            if (confirm('Start a new scan? Current results will be cleared.')) {
+                fetch('/api/clear', { method: 'POST' }).then(() => {
+                    groups = [];
+                    selections = {};
+                    document.getElementById('groupsContainer').classList.remove('active');
+                    document.getElementById('statsBar').style.display = 'none';
+                    document.getElementById('actionBar').style.display = 'none';
+                    document.getElementById('filterBar').style.display = 'none';
+                });
+            }
+        }
+        
+        // =============================================================
+        // Filtering & Pagination
+        // =============================================================
+        function applyFilters() {
+            const typeFilter = document.getElementById('filterType').value;
+            const sortBy = document.getElementById('sortBy').value;
+            const search = document.getElementById('searchFilter').value.toLowerCase();
+            
+            filteredGroups = groups.filter(g => {
+                if (typeFilter !== 'all' && g.match_type !== typeFilter) return false;
+                if (search) {
+                    const hasMatch = g.images.some(img => 
+                        img.filename.toLowerCase().includes(search) ||
+                        img.directory.toLowerCase().includes(search)
+                    );
+                    if (!hasMatch) return false;
+                }
+                return true;
+            });
+            
+            // Sort
+            filteredGroups.sort((a, b) => {
+                if (sortBy === 'savings') return b.potential_savings - a.potential_savings;
+                if (sortBy === 'count') return b.image_count - a.image_count;
+                return a.id - b.id;
+            });
+            
+            currentPage = 1;
+            renderGroups();
+            updatePagination();
+        }
+        
+        function updatePagination() {
+            const totalPages = Math.ceil(filteredGroups.length / PAGE_SIZE) || 1;
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+        }
+        
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                renderGroups();
+                updatePagination();
+                window.scrollTo(0, 0);
+            }
+        }
+        
+        function nextPage() {
+            const totalPages = Math.ceil(filteredGroups.length / PAGE_SIZE);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderGroups();
+                updatePagination();
+                window.scrollTo(0, 0);
+            }
+        }
+        
+        // =============================================================
+        // Rendering
+        // =============================================================
+        function renderGroups() {
+            const container = document.getElementById('groupsContainer');
+            
+            if (filteredGroups.length === 0) {
+                container.innerHTML = `
+                    <div class="no-results">
+                        <h2>âœ¨ No Duplicates Found!</h2>
+                        <p>Your image collection is clean, or no matches for current filters.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const start = (currentPage - 1) * PAGE_SIZE;
+            const pageGroups = filteredGroups.slice(start, start + PAGE_SIZE);
+            
+            container.innerHTML = pageGroups.map((group, groupIdx) => `
+                <div class="group-card" data-group-id="${group.id}" data-group-idx="${start + groupIdx}">
+                    <div class="group-header">
+                        <div class="group-title">
+                            Group #${group.id} 
+                            <span style="color: #888; font-weight: normal;">(${group.image_count} images)</span>
+                        </div>
+                        <div>
+                            <span class="group-badge ${group.match_type}">${group.match_type}</span>
+                            <span style="margin-left: 10px; color: #888;">Save ${group.potential_savings_formatted}</span>
+                        </div>
+                    </div>
+                    <div class="group-images">
+                        ${group.images.map((img, idx) => `
+                            <div class="image-card ${selections[img.path] === 'keep' ? 'selected' : 'to-delete'}" 
+                                 data-path="${escapeHtml(img.path)}"
+                                 data-img-idx="${idx}"
+                                 onclick="toggleSelection('${escapeJs(img.path)}', ${group.id})">
+                                <div class="image-wrapper">
+                                    <img class="image-preview" 
+                                         src="/api/image?path=${encodeURIComponent(img.path)}" 
+                                         alt="${escapeHtml(img.filename)}"
+                                         loading="lazy"
+                                         onerror="this.classList.add('error'); this.alt='Failed to load'"
+                                         ondblclick="event.stopPropagation(); openLightbox(${group.id}, ${idx})">
+                                    ${selections[img.path] === 'keep' 
+                                        ? '<div class="keep-badge">âœ“ KEEP</div>' 
+                                        : '<div class="delete-badge">âœ— DELETE</div>'}
+                                </div>
+                                <div class="image-info">
+                                    <div class="image-filename">${escapeHtml(img.filename)}</div>
+                                    <div class="image-path">${escapeHtml(img.directory)}</div>
+                                    <div class="image-meta">
+                                        <div class="meta-item">
+                                            <span class="meta-label">Size</span>
+                                            <span class="meta-value">${img.file_size_formatted}</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span class="meta-label">Resolution</span>
+                                            <span class="meta-value">${img.resolution}</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span class="meta-label">Megapixels</span>
+                                            <span class="meta-value">${img.megapixels} MP</span>
+                                        </div>
+                                        <div class="meta-item">
+                                            <span class="meta-label">Format</span>
+                                            <span class="meta-value">${img.format || 'Unknown'}</span>
+                                        </div>
+                                    </div>
+                                    <div class="quality-score">
+                                        <div class="meta-item">
+                                            <span class="meta-label">Quality Score</span>
+                                            <span class="meta-value">${img.quality_score}</span>
+                                        </div>
+                                        <div class="quality-bar">
+                                            <div class="quality-fill" style="width: ${Math.min(100, img.quality_score)}%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // =============================================================
+        // Selection Management
+        // =============================================================
+        function toggleSelection(path, groupId) {
+            const group = groups.find(g => g.id === groupId);
+            if (!group) return;
+            
+            // Save for undo
+            const prevSelections = {...selections};
+            undoStack.push({ type: 'selection', data: prevSelections });
+            if (undoStack.length > 50) undoStack.shift();
+            
+            // If clicking on a 'delete' image, make it 'keep' and others 'delete'
+            if (selections[path] === 'delete') {
+                group.images.forEach(img => {
+                    selections[img.path] = img.path === path ? 'keep' : 'delete';
+                });
+            }
+            
+            // Save to server
+            saveSelections();
+            
+            renderGroups();
+            updateStats();
+            showUndoToast('Selection updated');
+        }
+        
+        function saveSelections() {
+            fetch('/api/selections', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ selections })
+            });
+        }
+        
+        function resetSelections() {
+            const prevSelections = {...selections};
+            undoStack.push({ type: 'selection', data: prevSelections });
+            
+            groups.forEach(g => {
+                g.images.forEach((img, idx) => {
+                    selections[img.path] = idx === 0 ? 'keep' : 'delete';
+                });
+            });
+            
+            saveSelections();
+            renderGroups();
+            updateStats();
+        }
+        
+        function updateStats() {
+            const totalGroups = groups.length;
+            const totalDupes = groups.reduce((sum, g) => sum + g.images.length - 1, 0);
+            
+            let selectedCount = 0;
+            let selectedSize = 0;
+            
+            Object.entries(selections).forEach(([path, status]) => {
+                if (status === 'delete') {
+                    selectedCount++;
+                    for (const g of groups) {
+                        const img = g.images.find(i => i.path === path);
+                        if (img) {
+                            selectedSize += img.file_size;
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            document.getElementById('statGroups').textContent = totalGroups;
+            document.getElementById('statDupes').textContent = totalDupes;
+            document.getElementById('statSavings').textContent = formatSize(selectedSize);
+            document.getElementById('statSelected').textContent = selectedCount;
+            
+            document.getElementById('actionSummary').textContent = `${selectedCount} files selected for removal`;
+            document.getElementById('actionSavings').textContent = `(${formatSize(selectedSize)})`;
+        }
+        
+        // =============================================================
+        // Undo
+        // =============================================================
+        function showUndoToast(message) {
+            const toast = document.getElementById('undoToast');
+            document.getElementById('undoMessage').textContent = message;
+            toast.classList.add('active');
+            setTimeout(() => toast.classList.remove('active'), 5000);
+        }
+        
+        function undoAction() {
+            if (undoStack.length === 0) return;
+            
+            const action = undoStack.pop();
+            if (action.type === 'selection') {
+                selections = action.data;
+                saveSelections();
+                renderGroups();
+                updateStats();
+            }
+            
+            document.getElementById('undoToast').classList.remove('active');
+        }
+        
+        // =============================================================
+        // Export
+        // =============================================================
+        function exportSelections() {
+            const lines = ['# Duplicate Image Report', ''];
+            
+            groups.forEach(g => {
+                lines.push(`## Group ${g.id} (${g.match_type})`);
+                g.images.forEach(img => {
+                    const status = selections[img.path] === 'keep' ? 'KEEP' : 'DELETE';
+                    lines.push(`[${status}] ${img.path}`);
+                });
+                lines.push('');
+            });
+            
+            const blob = new Blob([lines.join('\\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'duplicate_report.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        // =============================================================
+        // Delete Modal
+        // =============================================================
+        function showDeleteModal() {
+            const count = Object.values(selections).filter(s => s === 'delete').length;
+            if (count === 0) {
+                alert('No files selected for removal');
+                return;
+            }
+            document.getElementById('deleteModalText').textContent = 
+                `Are you sure you want to move ${count} files to the trash folder?`;
+            
+            const scanDir = document.getElementById('directory').value.trim();
+            if (scanDir && !document.getElementById('trashDir').value) {
+                document.getElementById('trashDir').value = scanDir + '_duplicates_trash';
+            }
+            
+            document.getElementById('deleteModal').classList.add('active');
+        }
+        
+        function hideDeleteModal() {
+            document.getElementById('deleteModal').classList.remove('active');
+        }
+        
+        function executeDelete() {
+            const trashDir = document.getElementById('trashDir').value.trim();
+            if (!trashDir) {
+                alert('Please enter a trash directory');
+                return;
+            }
+            
+            const filesToDelete = Object.entries(selections)
+                .filter(([path, status]) => status === 'delete')
+                .map(([path]) => path);
+            
+            fetch('/api/delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({files: filesToDelete, trashDir})
+            })
+            .then(r => r.json())
+            .then(data => {
+                hideDeleteModal();
+                alert(`Moved ${data.moved} files to trash.\\n${data.errors} errors.`);
+                
+                // Remove deleted files from groups
+                groups.forEach(g => {
+                    g.images = g.images.filter(img => !filesToDelete.includes(img.path));
+                });
+                groups = groups.filter(g => g.images.length > 1);
+                
+                filesToDelete.forEach(path => delete selections[path]);
+                
+                applyFilters();
+                updateStats();
+                
+                if (groups.length === 0) {
+                    document.getElementById('actionBar').style.display = 'none';
+                }
+            });
+        }
+        
+        // =============================================================
+        // Lightbox
+        // =============================================================
+        function openLightbox(groupId, imgIdx) {
+            const group = groups.find(g => g.id === groupId);
+            if (!group) return;
+            
+            lightboxImages = group.images.map(img => img.path);
+            lightboxIndex = imgIdx;
+            
+            updateLightboxImage();
+            document.getElementById('lightbox').classList.add('active');
+        }
+        
+        function updateLightboxImage() {
+            const path = lightboxImages[lightboxIndex];
+            document.getElementById('lightboxImg').src = '/api/image?path=' + encodeURIComponent(path);
+        }
+        
+        function lightboxPrev(e) {
+            e.stopPropagation();
+            lightboxIndex = (lightboxIndex - 1 + lightboxImages.length) % lightboxImages.length;
+            updateLightboxImage();
+        }
+        
+        function lightboxNext(e) {
+            e.stopPropagation();
+            lightboxIndex = (lightboxIndex + 1) % lightboxImages.length;
+            updateLightboxImage();
+        }
+        
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('active');
+        }
+        
+        // =============================================================
+        // Keyboard Navigation
+        // =============================================================
+        document.addEventListener('keydown', e => {
+            // Ignore if typing in input
+            if (e.target.tagName === 'INPUT') return;
+            
+            if (e.key === 'Escape') {
+                closeLightbox();
+                hideDeleteModal();
+                return;
+            }
+            
+            // Lightbox navigation
+            if (document.getElementById('lightbox').classList.contains('active')) {
+                if (e.key === 'ArrowLeft') lightboxPrev(e);
+                if (e.key === 'ArrowRight') lightboxNext(e);
+                return;
+            }
+            
+            // Undo
+            if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                undoAction();
+                return;
+            }
+            
+            if (e.key === 'z') {
+                undoAction();
+                return;
+            }
+        });
+        
+        // =============================================================
+        // Utilities
+        // =============================================================
+        function formatSize(bytes) {
+            const units = ['B', 'KB', 'MB', 'GB'];
+            let i = 0;
+            while (bytes >= 1024 && i < units.length - 1) {
+                bytes /= 1024;
+                i++;
+            }
+            return bytes.toFixed(1) + ' ' + units[i];
+        }
+        
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+        
+        function escapeJs(str) {
+            return str.replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'");
+        }
+    </script>
+</body>
+</html>
