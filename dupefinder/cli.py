@@ -16,7 +16,7 @@ Usage:
     python -m dupefinder.cli /path/to/photos
     python -m dupefinder.cli /path/to/photos --action move --trash-dir ./duplicates
 
-Author: Claude (for Zach)
+Author: Zach
 """
 
 import argparse

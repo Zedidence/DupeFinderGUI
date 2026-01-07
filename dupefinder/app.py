@@ -9,7 +9,7 @@ Or: python dupefinder/app.py
 
 Then open http://localhost:5000 in your browser
 
-Author: Claude (for Zach)
+Author: Zach
 """
 
 import os

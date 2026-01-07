@@ -11,11 +11,11 @@ Features:
 - Web GUI for easy review
 - CLI for automation
 
-Author: Claude (for Zach)
+Author: Zach
 """
 
 __version__ = "1.0.0"
-__author__ = "Claude (for Zach)"
+__author__ = "Zedidence"
 
 from .models import ImageInfo, DuplicateGroup
 from .config import IMAGE_EXTENSIONS, FORMAT_QUALITY_RANK
