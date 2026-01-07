@@ -178,4 +178,4 @@ MIT License - feel free to use and modify!
 
 ## Author
 
-Created by Claude (for Zach)
+Created by Zach
