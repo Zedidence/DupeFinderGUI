@@ -24,7 +24,7 @@ setup(
     description="A comprehensive tool for finding duplicate and visually similar images",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/dupefinder",
+    url="https://github.com/Zedidence/DupeFinderGUI.git",
     packages=find_packages(),
     include_package_data=True,
     package_data={
