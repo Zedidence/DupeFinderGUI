@@ -72,12 +72,16 @@ def cleanup_on_exit():
 
 
 def suppress_flask_banner():
-    """Suppress Flask's development server banner."""
+    """Suppress Flask's development server banner and startup messages."""
     try:
         import flask.cli
         flask.cli.show_server_banner = lambda *args, **kwargs: None
     except (ImportError, AttributeError):
         pass
+    
+    # Suppress werkzeug's startup log messages
+    import logging
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 
 def main():
@@ -149,8 +153,6 @@ def main():
     # Suppress Flask banner for non-verbose modes
     if log_level < LOG_VERBOSE:
         suppress_flask_banner()
-        # Suppress werkzeug startup messages
-        os.environ['WERKZEUG_RUN_MAIN'] = 'true'
     
     # Create the app
     app = create_app(log_level)
