@@ -57,6 +57,12 @@ DEFAULT_THRESHOLD = 10
 # Default number of parallel workers for image analysis
 DEFAULT_WORKERS = 4
 
+# LSH (Locality-Sensitive Hashing) configuration
+# LSH provides O(n) performance vs O(n²) brute-force for perceptual matching
+LSH_AUTO_THRESHOLD = 5000  # Auto-enable LSH when >= this many images
+LSH_DEFAULT_TABLES = 20    # Number of hash tables (more = better recall)
+LSH_DEFAULT_BITS = 16      # Bits per table (fewer = more candidates)
+
 # Bit depth mapping for different image modes
 MODE_BIT_DEPTHS = {
     '1': 1, 'L': 8, 'P': 8, 'RGB': 24, 'RGBA': 32,
