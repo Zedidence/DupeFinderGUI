@@ -14,7 +14,7 @@ import warnings
 from pathlib import Path
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 import logging
 
 from .config import (
@@ -49,12 +49,16 @@ Image.MAX_IMAGE_PIXELS = 500_000_000  # 500 megapixels
 warnings.filterwarnings("ignore", category=Image.DecompressionBombWarning)
 
 # Optional: tqdm for progress bars
+# Store as Optional[Any] to satisfy type checkers when tqdm is not installed
+HAS_TQDM = False
+_tqdm_class: Optional[Any] = None
+
 try:
-    from tqdm import tqdm
+    from tqdm import tqdm as _tqdm_import
     HAS_TQDM = True
+    _tqdm_class = _tqdm_import
 except ImportError:
-    HAS_TQDM = False
-    tqdm = None
+    pass
 
 
 def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]:
@@ -254,8 +258,11 @@ def analyze_images_parallel(
     total = len(filepaths)
     stats = CacheStats(total_files=total)
     
+    # Initialize cache to None - will be set if use_cache is True
+    cache = None
+    
     # Check cache first if enabled
-    cached_results = {}
+    cached_results: dict[str, Optional[ImageInfo]] = {}
     files_to_analyze = filepaths
     
     if use_cache:
@@ -266,7 +273,7 @@ def analyze_images_parallel(
         files_to_analyze = []
         for fp in filepaths:
             if cached_results.get(fp) is not None:
-                results.append(cached_results[fp])
+                results.append(cached_results[fp])  # type: ignore[arg-type]
                 stats.cache_hits += 1
             else:
                 files_to_analyze.append(fp)
@@ -278,7 +285,7 @@ def analyze_images_parallel(
     
     # Analyze uncached files
     if files_to_analyze:
-        newly_analyzed = []
+        newly_analyzed: list[ImageInfo] = []
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_path = {
@@ -287,8 +294,9 @@ def analyze_images_parallel(
             }
             
             # Use tqdm if available and requested
-            if HAS_TQDM and show_progress and tqdm is not None:
-                iterator = tqdm(
+            iterator: Any
+            if HAS_TQDM and show_progress and _tqdm_class is not None:
+                iterator = _tqdm_class(
                     as_completed(future_to_path),
                     total=len(files_to_analyze),
                     desc="Analyzing images",
@@ -320,8 +328,8 @@ def analyze_images_parallel(
                     if logger:
                         logger.warning(f"Failed to analyze {path}: {e}")
         
-        # Cache newly analyzed results
-        if use_cache and newly_analyzed:
+        # Cache newly analyzed results - cache is guaranteed non-None here if use_cache was True
+        if use_cache and cache is not None and newly_analyzed:
             cache.put_batch(newly_analyzed)
     
     return results, stats
@@ -493,9 +501,9 @@ def _find_perceptual_duplicates_bruteforce(
     # Compare all pairs O(n^2)
     total_comparisons = (len(candidates) * (len(candidates) - 1)) // 2
     
-    pbar = None
-    if HAS_TQDM and show_progress and total_comparisons > 1000:
-        pbar = tqdm(total=total_comparisons, desc="Comparing images", unit="cmp", ncols=80)
+    pbar: Optional[Any] = None
+    if HAS_TQDM and show_progress and total_comparisons > 1000 and _tqdm_class is not None:
+        pbar = _tqdm_class(total=total_comparisons, desc="Comparing images", unit="cmp", ncols=80)
     
     comparison_count = 0
     for i in range(len(candidates)):
@@ -555,9 +563,9 @@ def _find_perceptual_duplicates_lsh(
         )
     
     # Build LSH index
-    pbar_build = None
-    if HAS_TQDM and show_progress:
-        pbar_build = tqdm(total=n, desc="Building LSH index", unit="img", ncols=80)
+    pbar_build: Optional[Any] = None
+    if HAS_TQDM and show_progress and _tqdm_class is not None:
+        pbar_build = _tqdm_class(total=n, desc="Building LSH index", unit="img", ncols=80)
     
     lsh = HammingLSH(
         num_tables=num_tables,
@@ -601,9 +609,9 @@ def _find_perceptual_duplicates_lsh(
             parent[px] = py
     
     # Compare only LSH candidates
-    pbar = None
-    if HAS_TQDM and show_progress and total_candidates > 1000:
-        pbar = tqdm(total=total_candidates, desc="Comparing candidates", unit="cmp", ncols=80)
+    pbar: Optional[Any] = None
+    if HAS_TQDM and show_progress and total_candidates > 1000 and _tqdm_class is not None:
+        pbar = _tqdm_class(total=total_candidates, desc="Comparing candidates", unit="cmp", ncols=80)
     
     comparison_count = 0
     matches_found = 0
