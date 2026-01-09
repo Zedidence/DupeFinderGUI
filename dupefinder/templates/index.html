@@ -346,6 +346,10 @@
             color: #4a9eff;
         }
         
+        .stat-value.error {
+            color: #e74c3c;
+        }
+        
         .stat-label {
             font-size: 0.85rem;
             color: #888;
@@ -454,6 +458,10 @@
             background: #f39c12;
         }
         
+        .group-badge.error {
+            background: #e74c3c;
+        }
+        
         .group-images {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -482,6 +490,11 @@
         .image-card.to-delete {
             border-color: #e74c3c;
             opacity: 0.7;
+        }
+        
+        .image-card.error-card {
+            border-color: #e74c3c;
+            cursor: default;
         }
         
         .image-card.keyboard-focus {
@@ -600,8 +613,112 @@
             font-weight: 600;
         }
         
+        .error-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
         .image-wrapper {
             position: relative;
+        }
+        
+        /* Error Message Display */
+        .error-message {
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid #e74c3c;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #e74c3c;
+            word-break: break-all;
+        }
+        
+        /* Error Section */
+        .error-section {
+            background: #16213e;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            overflow: hidden;
+            display: none;
+        }
+        
+        .error-section.active {
+            display: block;
+        }
+        
+        .error-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background: #2d1f1f;
+            border-bottom: 1px solid #e74c3c;
+            cursor: pointer;
+        }
+        
+        .error-section-header:hover {
+            background: #3d2a2a;
+        }
+        
+        .error-section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #e74c3c;
+        }
+        
+        .error-section-toggle {
+            color: #e74c3c;
+            font-size: 1.5rem;
+            transition: transform 0.3s;
+        }
+        
+        .error-section.expanded .error-section-toggle {
+            transform: rotate(180deg);
+        }
+        
+        .error-section-content {
+            display: none;
+            padding: 20px;
+        }
+        
+        .error-section.expanded .error-section-content {
+            display: block;
+        }
+        
+        .error-images-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        
+        .error-image-item {
+            background: #0f0f23;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 3px solid #e74c3c;
+        }
+        
+        .error-image-path {
+            font-size: 0.85rem;
+            color: #ccc;
+            word-break: break-all;
+            margin-bottom: 8px;
+        }
+        
+        .error-image-error {
+            font-size: 0.8rem;
+            color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+            padding: 8px;
+            border-radius: 4px;
         }
         
         /* Action Bar */
@@ -898,6 +1015,10 @@
                 <div class="stat-value" id="statSelected">0</div>
                 <div class="stat-label">Selected for Removal</div>
             </div>
+            <div class="stat-item" id="statErrorsContainer" style="display: none;">
+                <div class="stat-value error" id="statErrors">0</div>
+                <div class="stat-label">Failed to Analyze</div>
+            </div>
             <div class="stat-item" style="margin-left: auto;">
                 <button class="btn btn-secondary btn-sm" onclick="newScan()">&#128260; New Scan</button>
             </div>
@@ -931,6 +1052,22 @@
         
         <!-- Groups Container -->
         <div class="groups-container" id="groupsContainer"></div>
+        
+        <!-- Error Images Section -->
+        <div class="error-section" id="errorSection">
+            <div class="error-section-header" onclick="toggleErrorSection()">
+                <div class="error-section-title">
+                    &#9888; <span id="errorSectionCount">0</span> Images Could Not Be Analyzed
+                </div>
+                <div class="error-section-toggle">&#9660;</div>
+            </div>
+            <div class="error-section-content">
+                <p style="color: #888; margin-bottom: 15px;">
+                    These images encountered errors during analysis (corrupt files, unsupported formats, permission issues, etc.)
+                </p>
+                <div class="error-images-grid" id="errorImagesGrid"></div>
+            </div>
+        </div>
         
         <!-- Action Bar -->
         <div class="action-bar" id="actionBar" style="display: none;">
@@ -1023,6 +1160,7 @@
         let selections = {};
         let undoStack = [];
         let directoryHistory = [];
+        let errorImages = [];
         let currentPage = 1;
         const PAGE_SIZE = 10;
         let focusedGroupIndex = -1;
@@ -1051,9 +1189,12 @@
                 .then(r => r.json())
                 .then(data => {
                     if (data.status === 'complete' && data.has_results) {
+                        let info = `Found ${data.group_count} duplicate groups from: ${data.directory}`;
+                        if (data.error_count > 0) {
+                            info += ` (${data.error_count} files had errors)`;
+                        }
                         document.getElementById('recoveryBanner').classList.add('active');
-                        document.getElementById('recoveryInfo').textContent = 
-                            `Found ${data.group_count} duplicate groups from: ${data.directory}`;
+                        document.getElementById('recoveryInfo').textContent = info;
                         
                         // Also check if perceptual was auto-disabled
                         if (data.auto_disabled_perceptual) {
@@ -1203,6 +1344,7 @@
             document.getElementById('statsBar').style.display = 'none';
             document.getElementById('actionBar').style.display = 'none';
             document.getElementById('filterBar').style.display = 'none';
+            document.getElementById('errorSection').classList.remove('active');
             
             fetch('/api/scan', {
                 method: 'POST',
@@ -1247,6 +1389,7 @@
                 .then(data => {
                     groups = data.groups;
                     selections = data.selections || {};
+                    errorImages = data.error_images || [];
                     
                     // If no selections yet, auto-select: keep best, delete rest
                     if (Object.keys(selections).length === 0) {
@@ -1266,6 +1409,7 @@
                     currentPage = 1;
                     applyFilters();
                     updateStats();
+                    renderErrorImages();
                     
                     document.getElementById('progressContainer').classList.remove('active');
                     document.getElementById('groupsContainer').classList.add('active');
@@ -1286,14 +1430,45 @@
                 fetch('/api/clear', { method: 'POST' }).then(() => {
                     groups = [];
                     selections = {};
+                    errorImages = [];
                     hidePerceptualWarning();
                     document.getElementById('groupsContainer').classList.remove('active');
                     document.getElementById('statsBar').style.display = 'none';
                     document.getElementById('actionBar').style.display = 'none';
                     document.getElementById('filterBar').style.display = 'none';
                     document.getElementById('cacheBanner').style.display = 'none';
+                    document.getElementById('errorSection').classList.remove('active');
                 });
             }
+        }
+        
+        // =============================================================
+        // Error Images Display
+        // =============================================================
+        function renderErrorImages() {
+            const section = document.getElementById('errorSection');
+            const grid = document.getElementById('errorImagesGrid');
+            const countEl = document.getElementById('errorSectionCount');
+            
+            if (errorImages.length === 0) {
+                section.classList.remove('active');
+                return;
+            }
+            
+            section.classList.add('active');
+            countEl.textContent = errorImages.length;
+            
+            grid.innerHTML = errorImages.map(img => `
+                <div class="error-image-item">
+                    <div class="error-image-path">${escapeHtml(img.path)}</div>
+                    <div class="error-image-error">${escapeHtml(img.error || 'Unknown error')}</div>
+                </div>
+            `).join('');
+        }
+        
+        function toggleErrorSection() {
+            const section = document.getElementById('errorSection');
+            section.classList.toggle('expanded');
         }
         
         // =============================================================
@@ -1515,6 +1690,14 @@
             document.getElementById('statSavings').textContent = formatSize(selectedSize);
             document.getElementById('statSelected').textContent = selectedCount;
             
+            // Show error count if there are errors
+            if (errorImages.length > 0) {
+                document.getElementById('statErrorsContainer').style.display = 'block';
+                document.getElementById('statErrors').textContent = errorImages.length;
+            } else {
+                document.getElementById('statErrorsContainer').style.display = 'none';
+            }
+            
             document.getElementById('actionSummary').textContent = `${selectedCount} files selected for removal`;
             document.getElementById('actionSavings').textContent = `(${formatSize(selectedSize)})`;
         }
@@ -1557,6 +1740,16 @@
                 });
                 lines.push('');
             });
+            
+            // Add error images section
+            if (errorImages.length > 0) {
+                lines.push('## Failed to Analyze');
+                errorImages.forEach(img => {
+                    lines.push(`[ERROR] ${img.path}`);
+                    lines.push(`        Reason: ${img.error || 'Unknown error'}`);
+                });
+                lines.push('');
+            }
             
             const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);

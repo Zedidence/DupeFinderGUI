@@ -154,12 +154,17 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             print(f"Cache: {cache_stats.cache_hits:,} hits, {cache_stats.cache_misses:,} misses "
                   f"({cache_stats.hit_rate:.1f}% hit rate)")
         
+        # Separate valid images from errors
         valid_images = [img for img in images if not img.error]
-        error_count = len(images) - len(valid_images)
+        error_images = [img for img in images if img.error]
+        error_count = len(error_images)
+        
+        # Store error images for display in GUI
+        scan_state.error_images = error_images
         
         if not valid_images:
             scan_state.status = 'complete'
-            scan_state.message = 'No valid images could be analyzed'
+            scan_state.message = f'No valid images could be analyzed ({error_count} errors)'
             scan_state.save()
             return
         
@@ -255,6 +260,9 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             summary_parts.append('(exact matches)')
         elif perceptual_count > 0:
             summary_parts.append('(visually similar)')
+        
+        if error_count > 0:
+            summary_parts.append(f'• {format_number(error_count)} files had errors')
         
         if auto_disabled_perceptual:
             summary_parts.append('• Perceptual matching skipped for large collection')

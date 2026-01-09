@@ -10,10 +10,11 @@ This module contains all the core functionality for:
 
 import hashlib
 import os
+import warnings
 from pathlib import Path
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Callable, Any
+from typing import Optional, Callable
 import logging
 
 from .config import (
@@ -37,34 +38,23 @@ except ImportError:
         "Install with: pip install Pillow imagehash"
     )
 
+# Increase PIL's decompression bomb limit for large images
+# Default is ~89MP (178 million pixels), we increase to 500MP for photo management
+# This handles legitimate large images like high-resolution scans and panoramas
+Image.MAX_IMAGE_PIXELS = 500_000_000  # 500 megapixels
+
+# Suppress specific PIL warnings that we handle gracefully
+# - DecompressionBombWarning: We've increased the limit appropriately
+# - Palette transparency warnings: We convert to RGB anyway
+warnings.filterwarnings("ignore", category=Image.DecompressionBombWarning)
+
 # Optional: tqdm for progress bars
-# Use a wrapper to satisfy type checkers
-HAS_TQDM = False
-_tqdm_func: Optional[Any] = None
-
 try:
-    from tqdm import tqdm as _tqdm_import
+    from tqdm import tqdm
     HAS_TQDM = True
-    _tqdm_func = _tqdm_import
 except ImportError:
-    pass
-
-
-def _create_progress_bar(total: int, desc: str, unit: str, ncols: int = 80, 
-                         initial: int = 0) -> Optional[Any]:
-    """Create a tqdm progress bar if available, otherwise return None."""
-    if HAS_TQDM and _tqdm_func is not None:
-        return _tqdm_func(total=total, desc=desc, unit=unit, ncols=ncols, initial=initial)
-    return None
-
-
-def _create_iterator_progress(iterator: Any, total: int, desc: str, 
-                               unit: str, ncols: int = 80, initial: int = 0) -> Any:
-    """Wrap an iterator with tqdm if available, otherwise return as-is."""
-    if HAS_TQDM and _tqdm_func is not None:
-        return _tqdm_func(iterator, total=total, desc=desc, unit=unit, 
-                         ncols=ncols, initial=initial)
-    return iterator
+    HAS_TQDM = False
+    tqdm = None
 
 
 def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]:
@@ -79,7 +69,7 @@ def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]
         List of absolute paths to image files
     """
     root = Path(root_path)
-    images: list[Path] = []
+    images = []
     
     for ext in IMAGE_EXTENSIONS:
         if recursive:
@@ -90,8 +80,8 @@ def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]
             images.extend(root.glob(f'*{ext.upper()}'))
     
     # Remove duplicates (case sensitivity issues on some filesystems)
-    seen: set[str] = set()
-    unique: list[str] = []
+    seen = set()
+    unique = []
     for img in images:
         resolved = str(img.resolve())
         if resolved not in seen:
@@ -260,14 +250,13 @@ def analyze_images_parallel(
     Returns:
         Tuple of (list of ImageInfo objects, CacheStats)
     """
-    results: list[ImageInfo] = []
+    results = []
     total = len(filepaths)
     stats = CacheStats(total_files=total)
     
     # Check cache first if enabled
-    cached_results: dict[str, Optional[ImageInfo]] = {}
+    cached_results = {}
     files_to_analyze = filepaths
-    cache = None  # Initialize to None to satisfy type checker
     
     if use_cache:
         cache = get_cache()
@@ -277,7 +266,7 @@ def analyze_images_parallel(
         files_to_analyze = []
         for fp in filepaths:
             if cached_results.get(fp) is not None:
-                results.append(cached_results[fp])  # type: ignore
+                results.append(cached_results[fp])
                 stats.cache_hits += 1
             else:
                 files_to_analyze.append(fp)
@@ -289,7 +278,7 @@ def analyze_images_parallel(
     
     # Analyze uncached files
     if files_to_analyze:
-        newly_analyzed: list[ImageInfo] = []
+        newly_analyzed = []
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_path = {
@@ -298,12 +287,13 @@ def analyze_images_parallel(
             }
             
             # Use tqdm if available and requested
-            if HAS_TQDM and show_progress:
-                iterator = _create_iterator_progress(
+            if HAS_TQDM and show_progress and tqdm is not None:
+                iterator = tqdm(
                     as_completed(future_to_path),
                     total=len(files_to_analyze),
                     desc="Analyzing images",
                     unit="img",
+                    ncols=80,
                     initial=stats.cache_hits,
                 )
             else:
@@ -331,7 +321,7 @@ def analyze_images_parallel(
                         logger.warning(f"Failed to analyze {path}: {e}")
         
         # Cache newly analyzed results
-        if use_cache and cache is not None and newly_analyzed:
+        if use_cache and newly_analyzed:
             cache.put_batch(newly_analyzed)
     
     return results, stats
@@ -378,14 +368,14 @@ def find_exact_duplicates(images: list[ImageInfo]) -> list[DuplicateGroup]:
     Returns:
         List of DuplicateGroup objects for groups with 2+ identical files
     """
-    hash_groups: dict[str, list[ImageInfo]] = defaultdict(list)
+    hash_groups = defaultdict(list)
     
     for img in images:
         if img.file_hash and not img.error:
             hash_groups[img.file_hash].append(img)
     
     # Filter to only groups with duplicates
-    duplicate_groups: list[DuplicateGroup] = []
+    duplicate_groups = []
     group_id = 1
     for file_hash, group_images in hash_groups.items():
         if len(group_images) > 1:
@@ -480,7 +470,7 @@ def _find_perceptual_duplicates_bruteforce(
     Best for small collections (< 5000 images).
     """
     # Parse perceptual hashes
-    parsed_hashes: list[Any] = []
+    parsed_hashes = []
     for img in candidates:
         try:
             parsed_hashes.append(imagehash.hex_to_hash(img.perceptual_hash))
@@ -503,9 +493,9 @@ def _find_perceptual_duplicates_bruteforce(
     # Compare all pairs O(n^2)
     total_comparisons = (len(candidates) * (len(candidates) - 1)) // 2
     
-    pbar: Optional[Any] = None
+    pbar = None
     if HAS_TQDM and show_progress and total_comparisons > 1000:
-        pbar = _create_progress_bar(total_comparisons, "Comparing images", "cmp")
+        pbar = tqdm(total=total_comparisons, desc="Comparing images", unit="cmp", ncols=80)
     
     comparison_count = 0
     for i in range(len(candidates)):
@@ -547,7 +537,7 @@ def _find_perceptual_duplicates_lsh(
     n = len(candidates)
     
     # Parse perceptual hashes
-    parsed_hashes: list[Any] = []
+    parsed_hashes = []
     for img in candidates:
         try:
             parsed_hashes.append(imagehash.hex_to_hash(img.perceptual_hash))
@@ -565,9 +555,9 @@ def _find_perceptual_duplicates_lsh(
         )
     
     # Build LSH index
-    pbar_build: Optional[Any] = None
+    pbar_build = None
     if HAS_TQDM and show_progress:
-        pbar_build = _create_progress_bar(n, "Building LSH index", "img")
+        pbar_build = tqdm(total=n, desc="Building LSH index", unit="img", ncols=80)
     
     lsh = HammingLSH(
         num_tables=num_tables,
@@ -611,9 +601,9 @@ def _find_perceptual_duplicates_lsh(
             parent[px] = py
     
     # Compare only LSH candidates
-    pbar: Optional[Any] = None
+    pbar = None
     if HAS_TQDM and show_progress and total_candidates > 1000:
-        pbar = _create_progress_bar(total_candidates, "Comparing candidates", "cmp")
+        pbar = tqdm(total=total_candidates, desc="Comparing candidates", unit="cmp", ncols=80)
     
     comparison_count = 0
     matches_found = 0

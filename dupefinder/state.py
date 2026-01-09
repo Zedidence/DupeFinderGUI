@@ -34,6 +34,7 @@ class ScanState:
         self.total_files = 0
         self.analyzed = 0
         self.groups: list[DuplicateGroup] = []
+        self.error_images: list[ImageInfo] = []  # Images that couldn't be analyzed
         self.selections: dict[str, str] = {}  # path -> 'keep' | 'delete'
         self.last_updated: Optional[str] = None
         self.settings = {
@@ -55,6 +56,7 @@ class ScanState:
                 'last_updated': datetime.now().isoformat(),
                 'settings': self.settings,
                 'groups': [g.to_dict() for g in self.groups] if self.status == 'complete' else [],
+                'error_images': [img.to_dict() for img in self.error_images] if self.status == 'complete' else [],
             }
             with open(STATE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(state_to_save, f)
@@ -98,6 +100,12 @@ class ScanState:
                 group = DuplicateGroup.from_dict(g_data)
                 self.groups.append(group)
             
+            # Rebuild error images from saved data
+            self.error_images = []
+            for img_data in saved.get('error_images', []):
+                img = ImageInfo.from_dict(img_data)
+                self.error_images.append(img)
+            
             return True
             
         except Exception as e:
@@ -123,6 +131,7 @@ class ScanState:
             'directory': self.directory,
             'has_results': len(self.groups) > 0,
             'group_count': len(self.groups),
+            'error_count': len(self.error_images),
         }
     
     def to_groups_dict(self) -> dict:
@@ -131,6 +140,7 @@ class ScanState:
             'groups': [g.to_dict() for g in self.groups],
             'selections': self.selections,
             'directory': self.directory,
+            'error_images': [img.to_dict() for img in self.error_images],
         }
 
 
