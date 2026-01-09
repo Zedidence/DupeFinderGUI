@@ -10,10 +10,11 @@ This module contains all the core functionality for:
 
 import hashlib
 import os
+import warnings
 from pathlib import Path
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 import logging
 
 from .config import (
@@ -21,9 +22,11 @@ from .config import (
     FORMAT_QUALITY_RANK,
     MODE_BIT_DEPTHS,
     DEFAULT_WORKERS,
+    LSH_AUTO_THRESHOLD,
 )
 from .models import ImageInfo, DuplicateGroup
 from .database import get_cache, CacheStats
+from .lsh import HammingLSH, LSHStats, calculate_optimal_params, estimate_comparison_reduction
 
 # Check for required dependencies
 try:
@@ -35,13 +38,27 @@ except ImportError:
         "Install with: pip install Pillow imagehash"
     )
 
+# Increase PIL's decompression bomb limit for large images
+# Default is ~89MP (178 million pixels), we increase to 500MP for photo management
+# This handles legitimate large images like high-resolution scans and panoramas
+Image.MAX_IMAGE_PIXELS = 500_000_000  # 500 megapixels
+
+# Suppress specific PIL warnings that we handle gracefully
+# - DecompressionBombWarning: We've increased the limit appropriately
+# - Palette transparency warnings: We convert to RGB anyway
+warnings.filterwarnings("ignore", category=Image.DecompressionBombWarning)
+
 # Optional: tqdm for progress bars
+# Store as Optional[Any] to satisfy type checkers when tqdm is not installed
+HAS_TQDM = False
+_tqdm_class: Optional[Any] = None
+
 try:
-    from tqdm import tqdm
+    from tqdm import tqdm as _tqdm_import
     HAS_TQDM = True
+    _tqdm_class = _tqdm_import
 except ImportError:
-    HAS_TQDM = False
-    tqdm = None
+    pass
 
 
 def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]:
@@ -241,8 +258,11 @@ def analyze_images_parallel(
     total = len(filepaths)
     stats = CacheStats(total_files=total)
     
+    # Initialize cache to None - will be set if use_cache is True
+    cache = None
+    
     # Check cache first if enabled
-    cached_results = {}
+    cached_results: dict[str, Optional[ImageInfo]] = {}
     files_to_analyze = filepaths
     
     if use_cache:
@@ -253,7 +273,7 @@ def analyze_images_parallel(
         files_to_analyze = []
         for fp in filepaths:
             if cached_results.get(fp) is not None:
-                results.append(cached_results[fp])
+                results.append(cached_results[fp])  # type: ignore[arg-type]
                 stats.cache_hits += 1
             else:
                 files_to_analyze.append(fp)
@@ -265,7 +285,7 @@ def analyze_images_parallel(
     
     # Analyze uncached files
     if files_to_analyze:
-        newly_analyzed = []
+        newly_analyzed: list[ImageInfo] = []
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             future_to_path = {
@@ -274,8 +294,9 @@ def analyze_images_parallel(
             }
             
             # Use tqdm if available and requested
-            if HAS_TQDM and show_progress:
-                iterator = tqdm(
+            iterator: Any
+            if HAS_TQDM and show_progress and _tqdm_class is not None:
+                iterator = _tqdm_class(
                     as_completed(future_to_path),
                     total=len(files_to_analyze),
                     desc="Analyzing images",
@@ -307,8 +328,8 @@ def analyze_images_parallel(
                     if logger:
                         logger.warning(f"Failed to analyze {path}: {e}")
         
-        # Cache newly analyzed results
-        if use_cache and newly_analyzed:
+        # Cache newly analyzed results - cache is guaranteed non-None here if use_cache was True
+        if use_cache and cache is not None and newly_analyzed:
             cache.put_batch(newly_analyzed)
     
     return results, stats
@@ -384,11 +405,14 @@ def find_perceptual_duplicates(
     start_id: int = 1,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     show_progress: bool = True,
+    use_lsh: Optional[bool] = None,
+    logger: Optional[logging.Logger] = None,
 ) -> list[DuplicateGroup]:
     """
     Find perceptually similar images using pHash.
     
-    Uses Union-Find algorithm for efficient grouping.
+    Automatically uses LSH (Locality-Sensitive Hashing) for large collections
+    to achieve O(n) performance instead of O(n^2).
     
     Args:
         images: List of ImageInfo objects to check
@@ -398,12 +422,14 @@ def find_perceptual_duplicates(
         start_id: Starting ID for duplicate groups
         progress_callback: Optional callback(current, total) for progress updates
         show_progress: Whether to show tqdm progress bar
+        use_lsh: Force LSH on/off. None = auto-select based on collection size
+        logger: Optional logger for status messages
         
     Returns:
         List of DuplicateGroup objects
     """
     # Filter candidates
-    candidates = []
+    candidates: list[ImageInfo] = []
     for img in images:
         if not img.perceptual_hash or img.error:
             continue
@@ -414,6 +440,43 @@ def find_perceptual_duplicates(
     if len(candidates) < 2:
         return []
     
+    # Auto-select LSH for large collections
+    if use_lsh is None:
+        use_lsh = len(candidates) >= LSH_AUTO_THRESHOLD
+        if use_lsh and logger:
+            logger.info(f"Using LSH optimization for {len(candidates):,} images")
+    
+    if use_lsh:
+        return _find_perceptual_duplicates_lsh(
+            candidates=candidates,
+            threshold=threshold,
+            start_id=start_id,
+            progress_callback=progress_callback,
+            show_progress=show_progress,
+            logger=logger,
+        )
+    else:
+        return _find_perceptual_duplicates_bruteforce(
+            candidates=candidates,
+            threshold=threshold,
+            start_id=start_id,
+            progress_callback=progress_callback,
+            show_progress=show_progress,
+        )
+
+
+def _find_perceptual_duplicates_bruteforce(
+    candidates: list[ImageInfo],
+    threshold: int = 10,
+    start_id: int = 1,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    show_progress: bool = True,
+) -> list[DuplicateGroup]:
+    """
+    Brute-force O(n^2) perceptual duplicate finding.
+    
+    Best for small collections (< 5000 images).
+    """
     # Parse perceptual hashes
     parsed_hashes = []
     for img in candidates:
@@ -425,23 +488,22 @@ def find_perceptual_duplicates(
     # Union-Find for efficient grouping
     parent = list(range(len(candidates)))
     
-    def find(x):
+    def find(x: int) -> int:
         if parent[x] != x:
             parent[x] = find(parent[x])  # Path compression
         return parent[x]
     
-    def union(x, y):
+    def union(x: int, y: int) -> None:
         px, py = find(x), find(y)
         if px != py:
             parent[px] = py
     
-    # Compare all pairs (O(n²) but necessary for perceptual matching)
+    # Compare all pairs O(n^2)
     total_comparisons = (len(candidates) * (len(candidates) - 1)) // 2
     
-    if HAS_TQDM and show_progress and total_comparisons > 1000:
-        pbar = tqdm(total=total_comparisons, desc="Comparing images", unit="cmp", ncols=80)
-    else:
-        pbar = None
+    pbar: Optional[Any] = None
+    if HAS_TQDM and show_progress and total_comparisons > 1000 and _tqdm_class is not None:
+        pbar = _tqdm_class(total=total_comparisons, desc="Comparing images", unit="cmp", ncols=80)
     
     comparison_count = 0
     for i in range(len(candidates)):
@@ -454,22 +516,165 @@ def find_perceptual_duplicates(
                     union(i, j)
             
             comparison_count += 1
-            if pbar and comparison_count % 1000 == 0:
+            if pbar is not None and comparison_count % 1000 == 0:
                 pbar.update(1000)
             if progress_callback and comparison_count % 10000 == 0:
                 progress_callback(comparison_count, total_comparisons)
     
-    if pbar:
+    if pbar is not None:
         pbar.close()
     
     # Collect groups
-    groups = defaultdict(list)
+    return _collect_duplicate_groups(candidates, parent, start_id)
+
+
+def _find_perceptual_duplicates_lsh(
+    candidates: list[ImageInfo],
+    threshold: int = 10,
+    start_id: int = 1,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    show_progress: bool = True,
+    logger: Optional[logging.Logger] = None,
+) -> list[DuplicateGroup]:
+    """
+    LSH-accelerated perceptual duplicate finding.
+    
+    Uses Locality-Sensitive Hashing to reduce comparisons from O(n^2) to O(n).
+    Best for large collections (>= 5000 images).
+    """
+    n = len(candidates)
+    
+    # Parse perceptual hashes
+    parsed_hashes = []
+    for img in candidates:
+        try:
+            parsed_hashes.append(imagehash.hex_to_hash(img.perceptual_hash))
+        except Exception:
+            parsed_hashes.append(None)
+    
+    # Calculate optimal LSH parameters based on collection size
+    num_tables, bits_per_table = calculate_optimal_params(n, threshold)
+    
+    if logger:
+        estimate = estimate_comparison_reduction(n, num_tables, bits_per_table)
+        logger.info(
+            f"LSH params: {num_tables} tables, {bits_per_table} bits/table "
+            f"(~{estimate['speedup_factor']:.0f}x speedup expected)"
+        )
+    
+    # Build LSH index
+    pbar_build: Optional[Any] = None
+    if HAS_TQDM and show_progress and _tqdm_class is not None:
+        pbar_build = _tqdm_class(total=n, desc="Building LSH index", unit="img", ncols=80)
+    
+    lsh = HammingLSH(
+        num_tables=num_tables,
+        bits_per_table=bits_per_table,
+        hash_bits=256,  # hash_size=16 produces 256-bit hashes
+    )
+    
+    for idx, phash in enumerate(parsed_hashes):
+        if phash is not None:
+            lsh.add(idx, phash)
+        if pbar_build is not None:
+            pbar_build.update(1)
+    
+    if pbar_build is not None:
+        pbar_build.close()
+    
+    # Get all candidate pairs from LSH
+    candidate_pairs = lsh.get_all_candidate_pairs()
+    total_candidates = len(candidate_pairs)
+    
+    brute_force_comparisons = (n * (n - 1)) // 2
+    reduction = 1 - (total_candidates / max(1, brute_force_comparisons))
+    
+    if logger:
+        logger.info(
+            f"LSH reduced comparisons: {brute_force_comparisons:,} -> {total_candidates:,} "
+            f"({reduction:.1%} reduction)"
+        )
+    
+    # Union-Find for grouping
+    parent = list(range(len(candidates)))
+    
+    def find(x: int) -> int:
+        if parent[x] != x:
+            parent[x] = find(parent[x])
+        return parent[x]
+    
+    def union(x: int, y: int) -> None:
+        px, py = find(x), find(y)
+        if px != py:
+            parent[px] = py
+    
+    # Compare only LSH candidates
+    pbar: Optional[Any] = None
+    if HAS_TQDM and show_progress and total_candidates > 1000 and _tqdm_class is not None:
+        pbar = _tqdm_class(total=total_candidates, desc="Comparing candidates", unit="cmp", ncols=80)
+    
+    comparison_count = 0
+    matches_found = 0
+    
+    for i, j in candidate_pairs:
+        if parsed_hashes[i] is not None and parsed_hashes[j] is not None:
+            distance = parsed_hashes[i] - parsed_hashes[j]
+            
+            if distance <= threshold:
+                union(i, j)
+                matches_found += 1
+        
+        comparison_count += 1
+        if pbar is not None and comparison_count % 1000 == 0:
+            pbar.update(1000)
+        if progress_callback and comparison_count % 10000 == 0:
+            # Report progress relative to candidate pairs, not brute force
+            progress_callback(comparison_count, total_candidates)
+    
+    if pbar is not None:
+        # Update remaining
+        remaining = total_candidates - (comparison_count // 1000) * 1000
+        if remaining > 0:
+            pbar.update(remaining)
+        pbar.close()
+    
+    if logger:
+        logger.info(f"Found {matches_found:,} matching pairs")
+    
+    # Collect groups
+    return _collect_duplicate_groups(candidates, parent, start_id)
+
+
+def _collect_duplicate_groups(
+    candidates: list[ImageInfo],
+    parent: list[int],
+    start_id: int,
+) -> list[DuplicateGroup]:
+    """
+    Collect duplicate groups from Union-Find parent array.
+    
+    Helper function shared by brute-force and LSH implementations.
+    """
+    # Find with path compression
+    def find(x: int) -> int:
+        root = x
+        while parent[root] != root:
+            root = parent[root]
+        # Path compression
+        while parent[x] != root:
+            next_x = parent[x]
+            parent[x] = root
+            x = next_x
+        return root
+    
+    # Collect groups
+    groups: dict[int, list[ImageInfo]] = defaultdict(list)
     for i, img in enumerate(candidates):
         root = find(i)
         groups[root].append(img)
     
     # Filter to only duplicates and create DuplicateGroup objects
-    duplicate_groups = []
+    duplicate_groups: list[DuplicateGroup] = []
     group_id = start_id
     for group_images in groups.values():
         if len(group_images) > 1:
