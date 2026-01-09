@@ -1,8 +1,1 @@
-dupefinder/__pycache__/__init__.cpython-313.pyc
-dupefinder/__pycache__/__main__.cpython-313.pyc
-dupefinder/__pycache__/app.cpython-313.pyc
-dupefinder/__pycache__/config.cpython-313.pyc
-dupefinder/__pycache__/models.cpython-313.pyc
-dupefinder/__pycache__/routes.cpython-313.pyc
-dupefinder/__pycache__/scanner.cpython-313.pyc
-dupefinder/__pycache__/state.cpython-313.pyc
+dupefinder/__pycache__/*
