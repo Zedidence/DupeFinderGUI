@@ -24,6 +24,27 @@ from .models import DuplicateGroup
 # Create blueprint for routes
 api = Blueprint('api', __name__)
 
+# Threshold for auto-disabling perceptual matching in GUI
+# Perceptual matching is O(n²), so 50K images = 1.25 billion comparisons
+PERCEPTUAL_AUTO_DISABLE_THRESHOLD = 50000
+
+
+def format_number(n: int) -> str:
+    """Format large numbers with commas for readability."""
+    return f"{n:,}"
+
+
+def format_time_estimate(seconds: float) -> str:
+    """Format seconds into human-readable time estimate."""
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        return f"{int(seconds / 60)}m {int(seconds % 60)}s"
+    else:
+        hours = int(seconds / 3600)
+        minutes = int((seconds % 3600) / 60)
+        return f"{hours}h {minutes}m"
+
 
 def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: bool):
     """
@@ -46,6 +67,9 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             'perceptual_only': perceptual_only,
         }
         
+        # Track if we auto-disabled perceptual
+        auto_disabled_perceptual = False
+        
         # Save to history
         HistoryManager.save_directory(directory)
         
@@ -59,12 +83,29 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             scan_state.save()
             return
         
+        # Check if we should auto-disable perceptual matching for large collections
+        if (not exact_only and not perceptual_only and 
+            len(image_files) > PERCEPTUAL_AUTO_DISABLE_THRESHOLD):
+            auto_disabled_perceptual = True
+            exact_only = True
+            scan_state.message = (
+                f'Large collection ({format_number(len(image_files))} images). '
+                f'Running exact match only for responsiveness. '
+                f'Use CLI with --threshold {threshold} for perceptual matching.'
+            )
+            scan_state.settings['exact_only'] = True
+            scan_state.settings['auto_disabled_perceptual'] = True
+            time.sleep(2)  # Give user time to see the message
+        
         # Analyze images
         scan_state.status = 'analyzing'
-        scan_state.message = f'Analyzing {len(image_files)} images...'
+        scan_state.message = f'Analyzing {format_number(len(image_files))} images...'
         
         images = []
         last_save_time = time.time()
+        last_rate_time = time.time()
+        last_rate_count = 0
+        images_per_second = 0
         
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = {executor.submit(analyze_image, path): path for path in image_files}
@@ -74,15 +115,40 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
                     images.append(info)
                 except Exception as e:
                     print(f"Error analyzing image: {e}")
+                
                 scan_state.analyzed = i + 1
                 scan_state.progress = int((i + 1) / len(image_files) * 50)
                 
+                # Calculate processing rate every 2 seconds
+                current_time = time.time()
+                if current_time - last_rate_time >= 2:
+                    elapsed = current_time - last_rate_time
+                    processed = (i + 1) - last_rate_count
+                    images_per_second = processed / elapsed if elapsed > 0 else 0
+                    last_rate_time = current_time
+                    last_rate_count = i + 1
+                
+                # Update message with progress and ETA
+                remaining = len(image_files) - (i + 1)
+                if images_per_second > 0:
+                    eta_seconds = remaining / images_per_second
+                    eta_str = format_time_estimate(eta_seconds)
+                    scan_state.message = (
+                        f'Analyzing images: {format_number(i + 1)}/{format_number(len(image_files))} '
+                        f'({int(images_per_second)}/sec, ~{eta_str} remaining)'
+                    )
+                else:
+                    scan_state.message = (
+                        f'Analyzing images: {format_number(i + 1)}/{format_number(len(image_files))}'
+                    )
+                
                 # Save state every 5 seconds during scan
-                if time.time() - last_save_time > 5:
+                if current_time - last_save_time > 5:
                     scan_state.save()
-                    last_save_time = time.time()
+                    last_save_time = current_time
         
         valid_images = [img for img in images if not img.error]
+        error_count = len(images) - len(valid_images)
         
         if not valid_images:
             scan_state.status = 'complete'
@@ -90,16 +156,26 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             scan_state.save()
             return
         
+        # Log error count if significant
+        if error_count > 0:
+            print(f"Warning: {error_count} images could not be analyzed")
+        
         # Find exact duplicates
         exact_groups = []
         exact_hashes = set()
         
         if not perceptual_only:
             scan_state.status = 'comparing'
-            scan_state.message = 'Finding exact duplicates...'
+            scan_state.message = f'Finding exact duplicates among {format_number(len(valid_images))} images...'
             
             exact_groups = find_exact_duplicates(valid_images)
             exact_hashes = {img.file_hash for g in exact_groups for img in g.images}
+            
+            exact_dupe_count = sum(len(g.images) - 1 for g in exact_groups)
+            scan_state.message = (
+                f'Found {format_number(exact_dupe_count)} exact duplicates '
+                f'in {format_number(len(exact_groups))} groups'
+            )
         
         scan_state.progress = 60
         scan_state.save()
@@ -108,10 +184,37 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
         perceptual_groups = []
         
         if not exact_only:
-            scan_state.message = 'Finding visually similar images...'
+            # Calculate expected comparisons for progress message
+            candidates_count = len([img for img in valid_images 
+                                   if img.perceptual_hash and img.file_hash not in exact_hashes])
+            total_comparisons = (candidates_count * (candidates_count - 1)) // 2
+            
+            scan_state.message = (
+                f'Finding visually similar images ({format_number(candidates_count)} candidates, '
+                f'{format_number(total_comparisons)} comparisons)...'
+            )
+            
+            comparison_start_time = time.time()
+            last_progress_update = time.time()
             
             def progress_callback(current, total):
+                nonlocal last_progress_update
                 scan_state.progress = 60 + int(current / total * 35)
+                
+                # Update message every 2 seconds with progress
+                current_time = time.time()
+                if current_time - last_progress_update >= 2:
+                    elapsed = current_time - comparison_start_time
+                    rate = current / elapsed if elapsed > 0 else 0
+                    remaining = total - current
+                    if rate > 0:
+                        eta_seconds = remaining / rate
+                        eta_str = format_time_estimate(eta_seconds)
+                        scan_state.message = (
+                            f'Comparing images: {format_number(current)}/{format_number(total)} '
+                            f'({format_number(int(rate))}/sec, ~{eta_str} remaining)'
+                        )
+                    last_progress_update = current_time
             
             perceptual_groups = find_perceptual_duplicates(
                 valid_images,
@@ -132,8 +235,24 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             for idx, img in enumerate(sorted_images):
                 scan_state.selections[img.path] = 'keep' if idx == 0 else 'delete'
         
+        # Build final summary message
         total_dupes = sum(len(g.images) - 1 for g in scan_state.groups)
-        scan_state.message = f'Found {total_dupes} duplicates in {len(scan_state.groups)} groups'
+        exact_count = sum(len(g.images) - 1 for g in exact_groups)
+        perceptual_count = sum(len(g.images) - 1 for g in perceptual_groups)
+        
+        summary_parts = [f'Found {format_number(total_dupes)} duplicates in {format_number(len(scan_state.groups))} groups']
+        
+        if exact_count > 0 and perceptual_count > 0:
+            summary_parts.append(f'({format_number(exact_count)} exact, {format_number(perceptual_count)} similar)')
+        elif exact_count > 0:
+            summary_parts.append('(exact matches)')
+        elif perceptual_count > 0:
+            summary_parts.append('(visually similar)')
+        
+        if auto_disabled_perceptual:
+            summary_parts.append('• Perceptual matching skipped for large collection')
+        
+        scan_state.message = ' '.join(summary_parts)
         scan_state.last_updated = datetime.now().isoformat()
         
         scan_state.save()
@@ -183,7 +302,11 @@ def api_ping():
 @api.route('/api/status')
 def api_status():
     """Return current scan status."""
-    return jsonify(scan_state.to_status_dict())
+    status_dict = scan_state.to_status_dict()
+    # Add auto-disabled flag if relevant
+    if scan_state.settings.get('auto_disabled_perceptual'):
+        status_dict['auto_disabled_perceptual'] = True
+    return jsonify(status_dict)
 
 
 @api.route('/api/history')

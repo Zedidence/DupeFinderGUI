@@ -103,6 +103,38 @@
             gap: 10px;
         }
         
+        /* Warning Banner for auto-disabled perceptual */
+        .warning-banner {
+            background: linear-gradient(135deg, #2d3436, #1a1a2e);
+            border: 1px solid #f39c12;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .warning-banner.active {
+            display: block;
+        }
+        
+        .warning-banner h3 {
+            color: #f39c12;
+            margin-bottom: 10px;
+        }
+        
+        .warning-banner p {
+            color: #888;
+            margin-bottom: 10px;
+        }
+        
+        .warning-banner code {
+            background: #0f0f23;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #4a9eff;
+        }
+        
         /* Setup Panel */
         .setup-panel {
             background: #16213e;
@@ -784,6 +816,14 @@
             </div>
         </div>
         
+        <!-- Warning Banner for large collections -->
+        <div class="warning-banner" id="warningBanner">
+            <h3>&#9888; Large Collection - Perceptual Matching Disabled</h3>
+            <p id="warningInfo">This collection has over 50,000 images. Perceptual matching was automatically disabled for responsiveness.</p>
+            <p>To find visually similar (not just identical) duplicates, use the CLI:</p>
+            <p><code id="cliCommand">python -m dupefinder cli /path/to/dir --threshold 10</code></p>
+        </div>
+        
         <!-- Setup Panel -->
         <div class="setup-panel" id="setupPanel">
             <div class="form-group">
@@ -943,6 +983,8 @@
         let lightboxIndex = 0;
         let lastPollTime = Date.now();
         let connectionLost = false;
+        let scanDirectory = '';
+        let scanThreshold = 10;
         
         // =============================================================
         // Initialization
@@ -961,8 +1003,24 @@
                         document.getElementById('recoveryBanner').classList.add('active');
                         document.getElementById('recoveryInfo').textContent = 
                             `Found ${data.group_count} duplicate groups from: ${data.directory}`;
+                        
+                        // Also check if perceptual was auto-disabled
+                        if (data.auto_disabled_perceptual) {
+                            showPerceptualWarning(data.directory);
+                        }
                     }
                 });
+        }
+        
+        function showPerceptualWarning(directory) {
+            const threshold = document.getElementById('threshold').value || 10;
+            document.getElementById('cliCommand').textContent = 
+                `python -m dupefinder cli "${directory}" --threshold ${threshold}`;
+            document.getElementById('warningBanner').classList.add('active');
+        }
+        
+        function hidePerceptualWarning() {
+            document.getElementById('warningBanner').classList.remove('active');
         }
         
         function restoreSession() {
@@ -972,6 +1030,7 @@
         
         function dismissRecovery() {
             document.getElementById('recoveryBanner').classList.remove('active');
+            hidePerceptualWarning();
             fetch('/api/clear', { method: 'POST' });
         }
         
@@ -1080,6 +1139,13 @@
             const exactOnly = document.getElementById('exactOnly').checked;
             const perceptualOnly = document.getElementById('perceptualOnly').checked;
             
+            // Store for CLI command display
+            scanDirectory = directory;
+            scanThreshold = threshold;
+            
+            // Hide any previous warning
+            hidePerceptualWarning();
+            
             document.getElementById('scanBtn').disabled = true;
             document.getElementById('progressContainer').classList.add('active');
             document.getElementById('groupsContainer').classList.remove('active');
@@ -1109,6 +1175,10 @@
                         document.getElementById('scanBtn').disabled = false;
                         
                         if (data.status === 'complete') {
+                            // Check if perceptual was auto-disabled
+                            if (data.auto_disabled_perceptual) {
+                                showPerceptualWarning(scanDirectory);
+                            }
                             loadResults();
                         } else {
                             alert('Scan error: ' + data.message);
@@ -1162,6 +1232,7 @@
                 fetch('/api/clear', { method: 'POST' }).then(() => {
                     groups = [];
                     selections = {};
+                    hidePerceptualWarning();
                     document.getElementById('groupsContainer').classList.remove('active');
                     document.getElementById('statsBar').style.display = 'none';
                     document.getElementById('actionBar').style.display = 'none';

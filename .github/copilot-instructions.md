@@ -7,6 +7,7 @@ This is a Python package for finding duplicate images with CLI and web GUI inter
 - `cli.py`: Command-line interface with actions (report/move/delete/hardlink/symlink)
 - `routes.py` + `app.py`: Flask web API and GUI server
 - `state.py`: Session persistence for GUI recovery
+- `__main__.py`: Entry point routing to CLI or GUI
 
 ## Key Patterns & Conventions
 
@@ -48,6 +49,7 @@ Example: `analyze_images_parallel(filepaths, max_workers=4, show_progress=True)`
 - Frontend polls `/api/status` for progress updates
 - Images served via `/api/image?path=...` for previews
 - User selections persisted in `scan_state.selections`
+- History manager tracks recent directories
 
 ## Development Workflow
 - **Run GUI**: `python -m dupefinder` (opens browser)
