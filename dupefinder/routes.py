@@ -16,10 +16,12 @@ from .state import scan_state, HistoryManager
 from .scanner import (
     find_image_files,
     analyze_image,
+    analyze_images_parallel,
     find_exact_duplicates,
     find_perceptual_duplicates,
 )
 from .models import DuplicateGroup
+from .database import get_cache
 
 # Create blueprint for routes
 api = Blueprint('api', __name__)
@@ -97,55 +99,60 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             scan_state.settings['auto_disabled_perceptual'] = True
             time.sleep(2)  # Give user time to see the message
         
-        # Analyze images
+        # Analyze images (with caching for faster re-scans)
         scan_state.status = 'analyzing'
         scan_state.message = f'Analyzing {format_number(len(image_files))} images...'
+        scan_state.save()
         
-        images = []
+        analysis_start_time = time.time()
         last_save_time = time.time()
-        last_rate_time = time.time()
-        last_rate_count = 0
-        images_per_second = 0
+        last_progress_update = time.time()
         
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            futures = {executor.submit(analyze_image, path): path for path in image_files}
-            for i, future in enumerate(as_completed(futures)):
-                try:
-                    info = future.result()
-                    images.append(info)
-                except Exception as e:
-                    print(f"Error analyzing image: {e}")
+        def analysis_progress_callback(current, total):
+            nonlocal last_save_time, last_progress_update
+            
+            scan_state.analyzed = current
+            scan_state.progress = int(current / total * 50)
+            
+            current_time = time.time()
+            
+            # Update message every 2 seconds
+            if current_time - last_progress_update >= 2:
+                elapsed = current_time - analysis_start_time
+                rate = current / elapsed if elapsed > 0 else 0
+                remaining = total - current
                 
-                scan_state.analyzed = i + 1
-                scan_state.progress = int((i + 1) / len(image_files) * 50)
-                
-                # Calculate processing rate every 2 seconds
-                current_time = time.time()
-                if current_time - last_rate_time >= 2:
-                    elapsed = current_time - last_rate_time
-                    processed = (i + 1) - last_rate_count
-                    images_per_second = processed / elapsed if elapsed > 0 else 0
-                    last_rate_time = current_time
-                    last_rate_count = i + 1
-                
-                # Update message with progress and ETA
-                remaining = len(image_files) - (i + 1)
-                if images_per_second > 0:
-                    eta_seconds = remaining / images_per_second
+                if rate > 0:
+                    eta_seconds = remaining / rate
                     eta_str = format_time_estimate(eta_seconds)
                     scan_state.message = (
-                        f'Analyzing images: {format_number(i + 1)}/{format_number(len(image_files))} '
-                        f'({int(images_per_second)}/sec, ~{eta_str} remaining)'
+                        f'Analyzing images: {format_number(current)}/{format_number(total)} '
+                        f'({int(rate)}/sec, ~{eta_str} remaining)'
                     )
                 else:
                     scan_state.message = (
-                        f'Analyzing images: {format_number(i + 1)}/{format_number(len(image_files))}'
+                        f'Analyzing images: {format_number(current)}/{format_number(total)}'
                     )
-                
-                # Save state every 5 seconds during scan
-                if current_time - last_save_time > 5:
-                    scan_state.save()
-                    last_save_time = current_time
+                last_progress_update = current_time
+            
+            # Save state every 5 seconds
+            if current_time - last_save_time > 5:
+                scan_state.save()
+                last_save_time = current_time
+        
+        # Use the cached parallel analyzer
+        images, cache_stats = analyze_images_parallel(
+            filepaths=image_files,
+            max_workers=4,
+            progress_callback=analysis_progress_callback,
+            show_progress=False,
+            use_cache=True,
+        )
+        
+        # Show cache stats in log
+        if cache_stats.cache_hits > 0:
+            print(f"Cache: {cache_stats.cache_hits:,} hits, {cache_stats.cache_misses:,} misses "
+                  f"({cache_stats.hit_rate:.1f}% hit rate)")
         
         valid_images = [img for img in images if not img.error]
         error_count = len(images) - len(valid_images)
@@ -384,3 +391,41 @@ def api_delete():
             print(f"Error moving {filepath}: {e}")
     
     return jsonify({'moved': moved, 'errors': errors})
+
+
+@api.route('/api/cache/stats')
+def api_cache_stats():
+    """Return cache statistics."""
+    cache = get_cache()
+    stats = cache.get_stats()
+    return jsonify(stats)
+
+
+@api.route('/api/cache/clear', methods=['POST'])
+def api_cache_clear():
+    """Clear the image analysis cache."""
+    cache = get_cache()
+    cache.clear()
+    return jsonify({'status': 'cleared'})
+
+
+@api.route('/api/cache/cleanup', methods=['POST'])
+def api_cache_cleanup():
+    """Clean up stale and missing entries from cache."""
+    cache = get_cache()
+    
+    # Remove entries for missing files
+    missing_removed = cache.cleanup_missing()
+    
+    # Remove entries not accessed in 30 days
+    data = request.json or {}
+    max_age_days = data.get('max_age_days', 30)
+    stale_removed = cache.cleanup_stale(max_age_days=max_age_days)
+    
+    # Compact the database
+    cache.vacuum()
+    
+    return jsonify({
+        'missing_removed': missing_removed,
+        'stale_removed': stale_removed,
+    })

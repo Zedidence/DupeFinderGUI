@@ -23,6 +23,7 @@ from .config import (
     DEFAULT_WORKERS,
 )
 from .models import ImageInfo, DuplicateGroup
+from .database import get_cache, CacheStats
 
 # Check for required dependencies
 try:
@@ -220,9 +221,108 @@ def analyze_images_parallel(
     progress_callback: Optional[Callable[[int, int], None]] = None,
     show_progress: bool = True,
     logger: Optional[logging.Logger] = None,
+    use_cache: bool = True,
+) -> tuple[list[ImageInfo], CacheStats]:
+    """
+    Analyze multiple images in parallel with optional caching.
+    
+    Args:
+        filepaths: List of image paths to analyze
+        max_workers: Number of parallel workers
+        progress_callback: Optional callback(current, total) for progress updates
+        show_progress: Whether to show tqdm progress bar
+        logger: Optional logger for status messages
+        use_cache: Whether to use database cache for results
+        
+    Returns:
+        Tuple of (list of ImageInfo objects, CacheStats)
+    """
+    results = []
+    total = len(filepaths)
+    stats = CacheStats(total_files=total)
+    
+    # Check cache first if enabled
+    cached_results = {}
+    files_to_analyze = filepaths
+    
+    if use_cache:
+        cache = get_cache()
+        cached_results = cache.get_batch(filepaths)
+        
+        # Separate cache hits from misses
+        files_to_analyze = []
+        for fp in filepaths:
+            if cached_results.get(fp) is not None:
+                results.append(cached_results[fp])
+                stats.cache_hits += 1
+            else:
+                files_to_analyze.append(fp)
+                stats.cache_misses += 1
+        
+        if logger and stats.cache_hits > 0:
+            logger.info(f"Cache: {stats.cache_hits} hits, {stats.cache_misses} misses "
+                       f"({stats.hit_rate:.1f}% hit rate)")
+    
+    # Analyze uncached files
+    if files_to_analyze:
+        newly_analyzed = []
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_path = {
+                executor.submit(analyze_image, path): path 
+                for path in files_to_analyze
+            }
+            
+            # Use tqdm if available and requested
+            if HAS_TQDM and show_progress:
+                iterator = tqdm(
+                    as_completed(future_to_path),
+                    total=len(files_to_analyze),
+                    desc="Analyzing images",
+                    unit="img",
+                    ncols=80,
+                    initial=stats.cache_hits,
+                )
+            else:
+                iterator = as_completed(future_to_path)
+            
+            completed = stats.cache_hits
+            for future in iterator:
+                completed += 1
+                try:
+                    info = future.result()
+                    results.append(info)
+                    newly_analyzed.append(info)
+                    
+                    # Progress callback
+                    if progress_callback:
+                        progress_callback(completed, total)
+                    
+                    # Fallback progress for non-tqdm
+                    if not HAS_TQDM and logger and completed % 100 == 0:
+                        logger.info(f"Analyzed {completed}/{total} images...")
+                        
+                except Exception as e:
+                    path = future_to_path[future]
+                    if logger:
+                        logger.warning(f"Failed to analyze {path}: {e}")
+        
+        # Cache newly analyzed results
+        if use_cache and newly_analyzed:
+            cache.put_batch(newly_analyzed)
+    
+    return results, stats
+
+
+def analyze_images_parallel_legacy(
+    filepaths: list[str],
+    max_workers: int = DEFAULT_WORKERS,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    show_progress: bool = True,
+    logger: Optional[logging.Logger] = None,
 ) -> list[ImageInfo]:
     """
-    Analyze multiple images in parallel.
+    Legacy version without cache support for backward compatibility.
     
     Args:
         filepaths: List of image paths to analyze
@@ -234,47 +334,14 @@ def analyze_images_parallel(
     Returns:
         List of ImageInfo objects
     """
-    results = []
-    total = len(filepaths)
-    
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_path = {
-            executor.submit(analyze_image, path): path 
-            for path in filepaths
-        }
-        
-        # Use tqdm if available and requested
-        if HAS_TQDM and show_progress:
-            iterator = tqdm(
-                as_completed(future_to_path),
-                total=total,
-                desc="Analyzing images",
-                unit="img",
-                ncols=80
-            )
-        else:
-            iterator = as_completed(future_to_path)
-        
-        completed = 0
-        for future in iterator:
-            completed += 1
-            try:
-                info = future.result()
-                results.append(info)
-                
-                # Progress callback
-                if progress_callback:
-                    progress_callback(completed, total)
-                
-                # Fallback progress for non-tqdm
-                if not HAS_TQDM and logger and completed % 100 == 0:
-                    logger.info(f"Analyzed {completed}/{total} images...")
-                    
-            except Exception as e:
-                path = future_to_path[future]
-                if logger:
-                    logger.warning(f"Failed to analyze {path}: {e}")
-    
+    results, _ = analyze_images_parallel(
+        filepaths=filepaths,
+        max_workers=max_workers,
+        progress_callback=progress_callback,
+        show_progress=show_progress,
+        logger=logger,
+        use_cache=False,
+    )
     return results
 
 

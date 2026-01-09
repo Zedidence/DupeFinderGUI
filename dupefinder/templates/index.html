@@ -135,6 +135,19 @@
             color: #4a9eff;
         }
         
+        /* Cache Info Banner */
+        .cache-banner {
+            background: linear-gradient(135deg, #1a3a1a, #1a1a2e);
+            border: 1px solid #27ae60;
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #27ae60;
+        }
+        
         /* Setup Panel */
         .setup-panel {
             background: #16213e;
@@ -890,6 +903,12 @@
             </div>
         </div>
         
+        <!-- Cache Info Banner (shown after scan with cache hits) -->
+        <div class="cache-banner" id="cacheBanner" style="display: none;">
+            <span id="cacheInfo">&#9889; Cache: Loading...</span>
+            <button class="btn btn-sm" onclick="showCacheModal()" style="margin-left: 10px; padding: 4px 12px; background: #333;">Manage Cache</button>
+        </div>
+        
         <!-- Filter Bar -->
         <div class="filter-bar" id="filterBar" style="display: none;">
             <select id="filterType" onchange="applyFilters()">
@@ -949,6 +968,35 @@
         </div>
     </div>
     
+    <!-- Cache Management Modal -->
+    <div class="modal-overlay" id="cacheModal">
+        <div class="modal">
+            <h2>&#128451; Cache Management</h2>
+            <p style="color: #888; margin-bottom: 20px;">
+                The cache stores analysis results to speed up re-scans of the same directories.
+            </p>
+            <div style="background: #0f0f23; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="color: #888;">Cached Images:</span>
+                    <span id="cacheModalEntries" style="color: #fff; font-weight: 600;">0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="color: #888;">Database Size:</span>
+                    <span id="cacheModalSize" style="color: #fff; font-weight: 600;">0 MB</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #888;">Location:</span>
+                    <span id="cacheModalPath" style="color: #666; font-size: 0.8rem; word-break: break-all;">~/.duplicate_finder_cache.db</span>
+                </div>
+            </div>
+            <div class="modal-buttons" style="flex-wrap: wrap; gap: 10px;">
+                <button class="btn btn-secondary" onclick="cleanupCache()">&#128465; Cleanup Old Entries</button>
+                <button class="btn btn-danger" onclick="clearCache()">&#128163; Clear All Cache</button>
+                <button class="btn btn-secondary" onclick="hideCacheModal()">Close</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Lightbox -->
     <div class="lightbox" id="lightbox">
         <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
@@ -996,6 +1044,9 @@
         });
         
         function checkForRecovery() {
+            // Always load cache stats on page load
+            loadCacheStats();
+            
             fetch('/api/status')
                 .then(r => r.json())
                 .then(data => {
@@ -1224,6 +1275,9 @@
                     if (groups.length > 0) {
                         document.getElementById('actionBar').style.display = 'flex';
                     }
+                    
+                    // Load cache stats
+                    loadCacheStats();
                 });
         }
         
@@ -1237,6 +1291,7 @@
                     document.getElementById('statsBar').style.display = 'none';
                     document.getElementById('actionBar').style.display = 'none';
                     document.getElementById('filterBar').style.display = 'none';
+                    document.getElementById('cacheBanner').style.display = 'none';
                 });
             }
         }
@@ -1641,6 +1696,70 @@
                 return;
             }
         });
+        
+        // =============================================================
+        // Cache Management
+        // =============================================================
+        function loadCacheStats() {
+            fetch('/api/cache/stats')
+                .then(r => r.json())
+                .then(data => {
+                    const entries = data.total_entries || 0;
+                    const sizeMb = data.db_size_mb || 0;
+                    
+                    document.getElementById('cacheInfo').textContent = 
+                        `⚡ Cache: ${entries.toLocaleString()} images cached (${sizeMb} MB)`;
+                    document.getElementById('cacheModalEntries').textContent = entries.toLocaleString();
+                    document.getElementById('cacheModalSize').textContent = `${sizeMb} MB`;
+                    document.getElementById('cacheModalPath').textContent = data.db_path || 'Unknown';
+                    
+                    // Show cache banner if there are cached entries
+                    if (entries > 0) {
+                        document.getElementById('cacheBanner').style.display = 'flex';
+                    }
+                })
+                .catch(() => {
+                    document.getElementById('cacheInfo').textContent = '⚡ Cache: Unable to load stats';
+                });
+        }
+        
+        function showCacheModal() {
+            loadCacheStats();
+            document.getElementById('cacheModal').classList.add('active');
+        }
+        
+        function hideCacheModal() {
+            document.getElementById('cacheModal').classList.remove('active');
+        }
+        
+        function clearCache() {
+            if (!confirm('Clear all cached analysis data? Next scan will re-analyze all images.')) {
+                return;
+            }
+            
+            fetch('/api/cache/clear', { method: 'POST' })
+                .then(r => r.json())
+                .then(() => {
+                    alert('Cache cleared successfully.');
+                    loadCacheStats();
+                    document.getElementById('cacheBanner').style.display = 'none';
+                })
+                .catch(() => alert('Failed to clear cache.'));
+        }
+        
+        function cleanupCache() {
+            fetch('/api/cache/cleanup', { 
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ max_age_days: 30 })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    alert(`Cleanup complete:\n- Removed ${data.missing_removed} entries for deleted files\n- Removed ${data.stale_removed} stale entries`);
+                    loadCacheStats();
+                })
+                .catch(() => alert('Failed to cleanup cache.'));
+        }
         
         // =============================================================
         // Utilities

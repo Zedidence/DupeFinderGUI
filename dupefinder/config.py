@@ -69,3 +69,7 @@ MODE_BIT_DEPTHS = {
 import os
 STATE_FILE = os.path.join(os.path.expanduser('~'), '.duplicate_finder_state.json')
 HISTORY_FILE = os.path.join(os.path.expanduser('~'), '.duplicate_finder_history.json')
+
+# SQLite cache database location
+# Stores analyzed image metadata for faster re-scans
+CACHE_DB_FILE = os.path.join(os.path.expanduser('~'), '.duplicate_finder_cache.db')

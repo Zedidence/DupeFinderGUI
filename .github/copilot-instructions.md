@@ -4,6 +4,7 @@
 This is a Python package for finding duplicate images with CLI and web GUI interfaces. Core components:
 - `scanner.py`: Image discovery, parallel analysis, duplicate detection (exact via SHA256, perceptual via pHash)
 - `models.py`: Data structures (`ImageInfo`, `DuplicateGroup`) with quality scoring
+- `database.py`: SQLite cache for incremental scans (`ImageCache`, `CacheStats`)
 - `cli.py`: Command-line interface with actions (report/move/delete/hardlink/symlink)
 - `routes.py` + `app.py`: Flask web API and GUI server
 - `state.py`: Session persistence for GUI recovery
@@ -30,6 +31,11 @@ exact_groups = find_exact_duplicates(images)
 exact_hashes = {img.file_hash for g in exact_groups for img in g.images}
 perceptual_groups = find_perceptual_duplicates(images, threshold=10, exclude_hashes=exact_hashes)
 ```
+
+### SQLite Caching
+Use `ImageCache` for incremental scans. Cache key: path + mtime + size. Reduces re-analysis time.
+
+Example: `cache = get_cache(); info = cache.get_or_analyze(filepath, analyze_image)`
 
 ### Parallel Processing
 Use `ThreadPoolExecutor` for image analysis. Default 4 workers, configurable.
