@@ -41,6 +41,20 @@ except ImportError:
         "Install with: pip install Pillow imagehash"
     )
 
+# Register HEIC/HEIF support via pillow-heif
+# This must be done before opening any HEIC files
+HAS_HEIF_SUPPORT = False
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    HAS_HEIF_SUPPORT = True
+    _logger.debug("HEIC/HEIF support enabled via pillow-heif")
+except ImportError:
+    _logger.warning(
+        "pillow-heif not installed - HEIC/HEIF files will not be processed. "
+        "Install with: pip install pillow-heif"
+    )
+
 # Increase PIL's decompression bomb limit for large images
 # Default is ~89MP (178 million pixels), we increase to 500MP for photo management
 # This handles legitimate large images like high-resolution scans and panoramas
@@ -78,7 +92,12 @@ def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]
     root = Path(root_path)
     images = []
     
-    for ext in IMAGE_EXTENSIONS:
+    # Filter out HEIC extensions if support not available
+    extensions_to_scan = IMAGE_EXTENSIONS
+    if not HAS_HEIF_SUPPORT:
+        extensions_to_scan = {ext for ext in IMAGE_EXTENSIONS if ext not in {'.heic', '.heif'}}
+    
+    for ext in extensions_to_scan:
         if recursive:
             images.extend(root.rglob(f'*{ext}'))
             images.extend(root.rglob(f'*{ext.upper()}'))
@@ -228,6 +247,12 @@ def analyze_image(filepath: str | Path, calculate_phash: bool = True) -> ImageIn
         
         # Calculate file hash
         info.file_hash = calculate_file_hash(filepath)
+        
+        # Check for HEIC without support
+        ext = os.path.splitext(filepath)[1].lower()
+        if ext in {'.heic', '.heif'} and not HAS_HEIF_SUPPORT:
+            info.error = "HEIC/HEIF support not installed (pip install pillow-heif)"
+            return info
         
         # Open image and extract metadata
         # FIXED #6: Wrap in try-except to handle corrupt/truncated files
@@ -698,3 +723,8 @@ def _collect_duplicate_groups(
             group_id += 1
     
     return duplicate_groups
+
+
+def has_heif_support() -> bool:
+    """Check if HEIC/HEIF support is available."""
+    return HAS_HEIF_SUPPORT

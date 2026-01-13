@@ -5,7 +5,7 @@ A comprehensive tool for finding duplicate and visually similar images.
 
 Features:
 - Multi-stage detection: exact hash + perceptual hash
-- Supports ALL common image formats
+- Supports ALL common image formats including HEIC/HEIF
 - Quality-based selection (keeps highest quality)
 - Configurable similarity threshold
 - Web GUI for easy review
@@ -16,7 +16,7 @@ Features:
 Author: Zach
 """
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __author__ = "Zedidence"
 
 from .models import ImageInfo, DuplicateGroup
@@ -29,6 +29,7 @@ from .scanner import (
     calculate_quality_score,
     find_exact_duplicates,
     find_perceptual_duplicates,
+    has_heif_support,
 )
 from .database import ImageCache, get_cache, CacheStats
 from .lsh import HammingLSH, LSHStats, calculate_optimal_params, estimate_comparison_reduction
@@ -46,6 +47,7 @@ __all__ = [
     "calculate_quality_score",
     "find_exact_duplicates",
     "find_perceptual_duplicates",
+    "has_heif_support",
     "ImageCache",
     "get_cache",
     "CacheStats",
