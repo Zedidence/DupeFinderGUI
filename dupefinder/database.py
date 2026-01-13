@@ -12,6 +12,7 @@ The cache uses file path + mtime + size as a cache key to detect changes.
 import sqlite3
 import os
 import time
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Generator
@@ -40,6 +41,8 @@ class ImageCache:
     """
     SQLite-backed cache for image analysis results.
     
+    FIXED #7: Now thread-safe for concurrent read/write operations.
+    
     Usage:
         cache = ImageCache()
         
@@ -65,6 +68,10 @@ class ImageCache:
         """
         self.db_path = db_path or CACHE_DB_FILE
         self._ensure_directory()
+        
+        # FIXED #7: Thread lock for write operations
+        self._write_lock = threading.Lock()
+        
         self._init_db()
     
     def _ensure_directory(self):
@@ -74,22 +81,47 @@ class ImageCache:
             os.makedirs(db_dir, exist_ok=True)
     
     @contextmanager
-    def _conn(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager for database connections."""
-        conn = sqlite3.connect(self.db_path, timeout=30.0)
-        conn.row_factory = sqlite3.Row
+    def _conn(self, exclusive: bool = False) -> Generator[sqlite3.Connection, None, None]:
+        """
+        Context manager for database connections.
+        
+        Args:
+            exclusive: If True, acquire write lock for thread safety
+        """
+        # FIXED #7: Acquire lock for exclusive (write) operations
+        if exclusive:
+            self._write_lock.acquire()
+        
         try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
+            conn = sqlite3.connect(
+                self.db_path, 
+                timeout=30.0,
+                # Enable WAL mode for better concurrency
+                isolation_level=None,
+            )
+            conn.row_factory = sqlite3.Row
+            
+            # Enable WAL mode for better read/write concurrency
+            conn.execute("PRAGMA journal_mode=WAL")
+            
+            # Begin transaction
+            conn.execute("BEGIN")
+            
+            try:
+                yield conn
+                conn.execute("COMMIT")
+            except Exception:
+                conn.execute("ROLLBACK")
+                raise
+            finally:
+                conn.close()
         finally:
-            conn.close()
+            if exclusive:
+                self._write_lock.release()
     
     def _init_db(self):
         """Initialize database schema."""
-        with self._conn() as conn:
+        with self._conn(exclusive=True) as conn:
             # Check schema version
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS meta (
@@ -206,13 +238,15 @@ class ImageCache:
             mtime, size = self._get_file_stats(filepath)
             cache_key = self._make_cache_key(filepath, mtime, size)
             
-            with self._conn() as conn:
+            # Read operations don't need exclusive lock
+            with self._conn(exclusive=False) as conn:
                 row = conn.execute("""
                     SELECT * FROM images WHERE cache_key = ?
                 """, (cache_key,)).fetchone()
                 
                 if row:
-                    # Update last accessed time
+                    # Update last accessed time (write operation)
+                    # This is a minor race condition but acceptable for access time
                     conn.execute("""
                         UPDATE images SET last_accessed = strftime('%s', 'now')
                         WHERE cache_key = ?
@@ -245,7 +279,7 @@ class ImageCache:
             info: ImageInfo to cache
             
         Returns:
-            True if cached successfully
+            True if successfully cached
         """
         try:
             if not os.path.exists(info.path):
@@ -254,7 +288,8 @@ class ImageCache:
             mtime, size = self._get_file_stats(info.path)
             cache_key = self._make_cache_key(info.path, mtime, size)
             
-            with self._conn() as conn:
+            # FIXED #7: Write operations use exclusive lock
+            with self._conn(exclusive=True) as conn:
                 conn.execute("""
                     INSERT OR REPLACE INTO images (
                         path, file_size, mtime, cache_key,
@@ -278,6 +313,8 @@ class ImageCache:
         """
         Cache multiple ImageInfo objects efficiently.
         
+        FIXED #7: Now thread-safe with exclusive lock for entire batch.
+        
         Args:
             images: List of ImageInfo objects
             
@@ -287,7 +324,8 @@ class ImageCache:
         cached = 0
         
         try:
-            with self._conn() as conn:
+            # FIXED #7: Single exclusive lock for entire batch operation
+            with self._conn(exclusive=True) as conn:
                 for info in images:
                     try:
                         if not os.path.exists(info.path):
@@ -345,9 +383,9 @@ class ImageCache:
             if not cache_keys:
                 return results
             
-            # Query all at once
+            # Query all at once (read operation)
             placeholders = ','.join('?' * len(cache_keys))
-            with self._conn() as conn:
+            with self._conn(exclusive=False) as conn:
                 rows = conn.execute(f"""
                     SELECT * FROM images WHERE cache_key IN ({placeholders})
                 """, list(cache_keys.keys())).fetchall()
@@ -386,7 +424,7 @@ class ImageCache:
     def invalidate(self, filepath: str):
         """Remove a specific file from the cache."""
         try:
-            with self._conn() as conn:
+            with self._conn(exclusive=True) as conn:
                 conn.execute("DELETE FROM images WHERE path = ?", (filepath,))
         except Exception:
             pass
@@ -394,7 +432,7 @@ class ImageCache:
     def invalidate_directory(self, directory: str):
         """Remove all cached entries for files in a directory."""
         try:
-            with self._conn() as conn:
+            with self._conn(exclusive=True) as conn:
                 conn.execute(
                     "DELETE FROM images WHERE path LIKE ?",
                     (f"{directory}%",)
@@ -411,7 +449,7 @@ class ImageCache:
         """
         try:
             cutoff = time.time() - (max_age_days * 24 * 60 * 60)
-            with self._conn() as conn:
+            with self._conn(exclusive=True) as conn:
                 result = conn.execute(
                     "DELETE FROM images WHERE last_accessed < ?",
                     (cutoff,)
@@ -428,7 +466,7 @@ class ImageCache:
             Number of entries removed
         """
         try:
-            with self._conn() as conn:
+            with self._conn(exclusive=True) as conn:
                 # Get all paths
                 rows = conn.execute("SELECT path FROM images").fetchall()
                 missing = [row['path'] for row in rows if not os.path.exists(row['path'])]
@@ -447,7 +485,7 @@ class ImageCache:
     def get_stats(self) -> dict:
         """Get cache statistics."""
         try:
-            with self._conn() as conn:
+            with self._conn(exclusive=False) as conn:
                 total = conn.execute("SELECT COUNT(*) as cnt FROM images").fetchone()['cnt']
                 
                 # Size on disk
@@ -470,35 +508,43 @@ class ImageCache:
     def clear(self):
         """Clear all cached data."""
         try:
-            with self._conn() as conn:
+            with self._conn(exclusive=True) as conn:
                 conn.execute("DELETE FROM images")
                 conn.execute("DELETE FROM scan_history")
-                conn.execute("VACUUM")
+            # VACUUM outside transaction
+            self.vacuum()
         except Exception:
             pass
     
     def vacuum(self):
         """Compact the database file."""
         try:
-            with self._conn() as conn:
-                conn.execute("VACUUM")
+            # VACUUM must run outside a transaction
+            conn = sqlite3.connect(self.db_path, timeout=30.0)
+            conn.execute("VACUUM")
+            conn.close()
         except Exception:
             pass
 
 
 # Global cache instance
 _cache_instance: Optional[ImageCache] = None
+_cache_lock = threading.Lock()
 
 
 def get_cache() -> ImageCache:
-    """Get or create the global cache instance."""
+    """Get or create the global cache instance (thread-safe)."""
     global _cache_instance
     if _cache_instance is None:
-        _cache_instance = ImageCache()
+        with _cache_lock:
+            # Double-check after acquiring lock
+            if _cache_instance is None:
+                _cache_instance = ImageCache()
     return _cache_instance
 
 
 def reset_cache():
     """Reset the global cache instance (mainly for testing)."""
     global _cache_instance
-    _cache_instance = None
+    with _cache_lock:
+        _cache_instance = None

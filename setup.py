@@ -19,7 +19,7 @@ if readme_path.exists():
 
 setup(
     name="dupefinder",
-    version="1.0.0",
+    version="2.0.0",  # FIXED: Synced with __init__.py (was 1.0.0)
     author="Zach Daly",
     description="A comprehensive tool for finding duplicate and visually similar images",
     long_description=long_description,
@@ -35,6 +35,7 @@ setup(
         "Pillow>=9.0.0",
         "imagehash>=4.0.0",
         "flask>=2.0.0",
+        "numpy>=1.20.0",  # FIXED: Now required (imagehash depends on it)
     ],
     extras_require={
         "dev": [

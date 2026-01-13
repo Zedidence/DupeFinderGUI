@@ -11,11 +11,11 @@ This module contains all the core functionality for:
 import hashlib
 import os
 import warnings
+import logging
 from pathlib import Path
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, Callable, Any
-import logging
 
 from .config import (
     IMAGE_EXTENSIONS,
@@ -27,6 +27,9 @@ from .config import (
 from .models import ImageInfo, DuplicateGroup
 from .database import get_cache, CacheStats
 from .lsh import HammingLSH, LSHStats, calculate_optimal_params, estimate_comparison_reduction
+
+# Module-level logger for hash failures and analysis issues
+_logger = logging.getLogger(__name__)
 
 # Check for required dependencies
 try:
@@ -112,7 +115,8 @@ def calculate_file_hash(filepath: str | Path, algorithm: str = 'sha256') -> str:
             for chunk in iter(lambda: f.read(65536), b''):
                 hasher.update(chunk)
         return hasher.hexdigest()
-    except Exception:
+    except Exception as e:
+        _logger.debug(f"File hash calculation failed for {filepath}: {e}")
         return ""
 
 
@@ -131,12 +135,23 @@ def calculate_perceptual_hash(filepath: str | Path, hash_size: int = 16) -> Opti
     """
     try:
         with Image.open(filepath) as img:
+            # FIXED #6: Verify image can be loaded before accessing attributes
+            img.load()  # Force load to detect truncated/corrupt images early
+            
             # Convert to RGB if necessary (handles transparency, etc.)
             if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
+                try:
+                    img = img.convert('RGB')
+                except Exception as conv_err:
+                    # FIXED #4: Log conversion failures instead of silent None
+                    _logger.debug(f"Image mode conversion failed for {filepath} (mode={img.mode}): {conv_err}")
+                    return None
+            
             phash = imagehash.phash(img, hash_size=hash_size)
             return str(phash)
-    except Exception:
+    except Exception as e:
+        # FIXED #4: Log perceptual hash failures instead of silently returning None
+        _logger.debug(f"Perceptual hash calculation failed for {filepath}: {e}")
         return None
 
 
@@ -200,28 +215,58 @@ def analyze_image(filepath: str | Path, calculate_phash: bool = True) -> ImageIn
     info = ImageInfo(path=filepath)
     
     try:
-        # File size
+        # File size - check file exists and is accessible first
+        if not os.path.exists(filepath):
+            info.error = "File not found"
+            return info
+        
+        if not os.access(filepath, os.R_OK):
+            info.error = "File not readable (permission denied)"
+            return info
+        
         info.file_size = os.path.getsize(filepath)
         
         # Calculate file hash
         info.file_hash = calculate_file_hash(filepath)
         
         # Open image and extract metadata
-        with Image.open(filepath) as img:
-            info.width = img.width
-            info.height = img.height
-            info.pixel_count = img.width * img.height
-            info.format = img.format or ""
-            
-            # Bit depth
-            info.bit_depth = MODE_BIT_DEPTHS.get(img.mode, 24)
-            
-            # Perceptual hash
-            if calculate_phash:
-                if img.mode not in ('RGB', 'L'):
-                    img = img.convert('RGB')
-                phash = imagehash.phash(img, hash_size=16)
-                info.perceptual_hash = str(phash)
+        # FIXED #6: Wrap in try-except to handle corrupt/truncated files
+        try:
+            with Image.open(filepath) as img:
+                # Force load to detect truncated images early
+                try:
+                    img.load()
+                except Exception as load_err:
+                    info.error = f"Corrupt or truncated image: {load_err}"
+                    return info
+                
+                # Now safe to access attributes
+                info.width = img.width
+                info.height = img.height
+                info.pixel_count = img.width * img.height
+                info.format = img.format or ""
+                
+                # Bit depth
+                info.bit_depth = MODE_BIT_DEPTHS.get(img.mode, 24)
+                
+                # Perceptual hash
+                if calculate_phash:
+                    try:
+                        if img.mode not in ('RGB', 'L'):
+                            img = img.convert('RGB')
+                        phash = imagehash.phash(img, hash_size=16)
+                        info.perceptual_hash = str(phash)
+                    except Exception as phash_err:
+                        # FIXED #4: Log but don't fail the whole analysis
+                        _logger.debug(f"Perceptual hash failed for {filepath}: {phash_err}")
+                        info.perceptual_hash = ""
+        
+        except Image.UnidentifiedImageError as e:
+            info.error = f"Not a valid image file: {e}"
+            return info
+        except Exception as e:
+            info.error = f"Failed to open image: {e}"
+            return info
         
         # Calculate quality score
         info.quality_score = calculate_quality_score(info)
@@ -249,142 +294,113 @@ def analyze_images_parallel(
         progress_callback: Optional callback(current, total) for progress updates
         show_progress: Whether to show tqdm progress bar
         logger: Optional logger for status messages
-        use_cache: Whether to use database cache for results
+        use_cache: Whether to use SQLite caching
         
     Returns:
         Tuple of (list of ImageInfo objects, CacheStats)
     """
-    results = []
-    total = len(filepaths)
-    stats = CacheStats(total_files=total)
+    if not filepaths:
+        return [], CacheStats()
     
-    # Initialize cache to None - will be set if use_cache is True
-    cache = None
+    results: list[ImageInfo] = []
+    stats = CacheStats(total_files=len(filepaths))
     
-    # Check cache first if enabled
-    cached_results: dict[str, Optional[ImageInfo]] = {}
-    files_to_analyze = filepaths
+    # Try to get cached results first
+    cache = get_cache() if use_cache else None
+    to_analyze: list[str] = []
     
-    if use_cache:
-        cache = get_cache()
+    if cache:
         cached_results = cache.get_batch(filepaths)
-        
-        # Separate cache hits from misses
-        files_to_analyze = []
-        for fp in filepaths:
-            if cached_results.get(fp) is not None:
-                results.append(cached_results[fp])  # type: ignore[arg-type]
+        for filepath in filepaths:
+            cached = cached_results.get(filepath)
+            if cached is not None:
+                results.append(cached)
                 stats.cache_hits += 1
             else:
-                files_to_analyze.append(fp)
+                to_analyze.append(filepath)
                 stats.cache_misses += 1
         
         if logger and stats.cache_hits > 0:
-            logger.info(f"Cache: {stats.cache_hits} hits, {stats.cache_misses} misses "
-                       f"({stats.hit_rate:.1f}% hit rate)")
+            logger.info(
+                f"Cache: {stats.cache_hits:,} hits, {stats.cache_misses:,} misses "
+                f"({stats.hit_rate:.1f}% hit rate)"
+            )
+    else:
+        to_analyze = list(filepaths)
+        stats.cache_misses = len(filepaths)
     
     # Analyze uncached files
-    if files_to_analyze:
+    if to_analyze:
+        pbar: Optional[Any] = None
+        if HAS_TQDM and show_progress and _tqdm_class is not None:
+            pbar = _tqdm_class(
+                total=len(to_analyze),
+                desc="Analyzing images",
+                unit="img",
+                ncols=80,
+            )
+        
         newly_analyzed: list[ImageInfo] = []
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_path = {
+            futures = {
                 executor.submit(analyze_image, path): path 
-                for path in files_to_analyze
+                for path in to_analyze
             }
             
-            # Use tqdm if available and requested
-            iterator: Any
-            if HAS_TQDM and show_progress and _tqdm_class is not None:
-                iterator = _tqdm_class(
-                    as_completed(future_to_path),
-                    total=len(files_to_analyze),
-                    desc="Analyzing images",
-                    unit="img",
-                    ncols=80,
-                    initial=stats.cache_hits,
-                )
-            else:
-                iterator = as_completed(future_to_path)
-            
-            completed = stats.cache_hits
-            for future in iterator:
-                completed += 1
+            for i, future in enumerate(as_completed(futures)):
                 try:
                     info = future.result()
                     results.append(info)
                     newly_analyzed.append(info)
-                    
-                    # Progress callback
-                    if progress_callback:
-                        progress_callback(completed, total)
-                    
-                    # Fallback progress for non-tqdm
-                    if not HAS_TQDM and logger and completed % 100 == 0:
-                        logger.info(f"Analyzed {completed}/{total} images...")
-                        
                 except Exception as e:
-                    path = future_to_path[future]
-                    if logger:
-                        logger.warning(f"Failed to analyze {path}: {e}")
+                    filepath = futures[future]
+                    info = ImageInfo(path=filepath, error=str(e))
+                    results.append(info)
+                    newly_analyzed.append(info)
+                
+                if pbar is not None:
+                    pbar.update(1)
+                
+                if progress_callback:
+                    # Report progress including cached results
+                    progress_callback(stats.cache_hits + i + 1, len(filepaths))
         
-        # Cache newly analyzed results - cache is guaranteed non-None here if use_cache was True
-        if use_cache and cache is not None and newly_analyzed:
+        if pbar is not None:
+            pbar.close()
+        
+        # Cache newly analyzed results
+        if cache and newly_analyzed:
             cache.put_batch(newly_analyzed)
     
     return results, stats
 
 
-def analyze_images_parallel_legacy(
-    filepaths: list[str],
-    max_workers: int = DEFAULT_WORKERS,
-    progress_callback: Optional[Callable[[int, int], None]] = None,
-    show_progress: bool = True,
-    logger: Optional[logging.Logger] = None,
-) -> list[ImageInfo]:
+def find_exact_duplicates(
+    images: list[ImageInfo],
+    start_id: int = 1,
+) -> list[DuplicateGroup]:
     """
-    Legacy version without cache support for backward compatibility.
-    
-    Args:
-        filepaths: List of image paths to analyze
-        max_workers: Number of parallel workers
-        progress_callback: Optional callback(current, total) for progress updates
-        show_progress: Whether to show tqdm progress bar
-        logger: Optional logger for status messages
-        
-    Returns:
-        List of ImageInfo objects
-    """
-    results, _ = analyze_images_parallel(
-        filepaths=filepaths,
-        max_workers=max_workers,
-        progress_callback=progress_callback,
-        show_progress=show_progress,
-        logger=logger,
-        use_cache=False,
-    )
-    return results
-
-
-def find_exact_duplicates(images: list[ImageInfo]) -> list[DuplicateGroup]:
-    """
-    Find exact duplicates using file hash.
+    Find exact duplicate images based on file hash.
     
     Args:
         images: List of ImageInfo objects to check
+        start_id: Starting ID for duplicate groups
         
     Returns:
-        List of DuplicateGroup objects for groups with 2+ identical files
+        List of DuplicateGroup objects containing exact duplicates
     """
-    hash_groups = defaultdict(list)
+    # Group by file hash
+    hash_groups: dict[str, list[ImageInfo]] = defaultdict(list)
     
     for img in images:
-        if img.file_hash and not img.error:
+        if img.file_hash:
             hash_groups[img.file_hash].append(img)
     
-    # Filter to only groups with duplicates
-    duplicate_groups = []
-    group_id = 1
+    # Create duplicate groups
+    groups = []
+    group_id = start_id
+    
     for file_hash, group_images in hash_groups.items():
         if len(group_images) > 1:
             group = DuplicateGroup(
@@ -392,10 +408,10 @@ def find_exact_duplicates(images: list[ImageInfo]) -> list[DuplicateGroup]:
                 images=group_images,
                 match_type="exact"
             )
-            duplicate_groups.append(group)
+            groups.append(group)
             group_id += 1
     
-    return duplicate_groups
+    return groups
 
 
 def find_perceptual_duplicates(
@@ -411,31 +427,26 @@ def find_perceptual_duplicates(
     """
     Find perceptually similar images using pHash.
     
-    Automatically uses LSH (Locality-Sensitive Hashing) for large collections
-    to achieve O(n) performance instead of O(n^2).
-    
     Args:
         images: List of ImageInfo objects to check
-        threshold: Maximum hamming distance to consider as duplicate (0-64)
-                   Lower = stricter matching. Recommended: 5-15
+        threshold: Maximum Hamming distance for similarity (0-64)
         exclude_hashes: Set of file hashes to skip (e.g., exact duplicates)
         start_id: Starting ID for duplicate groups
-        progress_callback: Optional callback(current, total) for progress updates
+        progress_callback: Optional callback(current, total) for progress
         show_progress: Whether to show tqdm progress bar
-        use_lsh: Force LSH on/off. None = auto-select based on collection size
+        use_lsh: Force LSH on/off, or None for auto-select based on collection size
         logger: Optional logger for status messages
         
     Returns:
-        List of DuplicateGroup objects
+        List of DuplicateGroup objects containing similar images
     """
-    # Filter candidates
-    candidates: list[ImageInfo] = []
-    for img in images:
-        if not img.perceptual_hash or img.error:
-            continue
-        if exclude_hashes and img.file_hash in exclude_hashes:
-            continue
-        candidates.append(img)
+    exclude_hashes = exclude_hashes or set()
+    
+    # Filter to images with perceptual hashes that aren't already exact duplicates
+    candidates = [
+        img for img in images 
+        if img.perceptual_hash and img.file_hash not in exclude_hashes
+    ]
     
     if len(candidates) < 2:
         return []

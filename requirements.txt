@@ -2,7 +2,7 @@
 Pillow>=9.0.0
 imagehash>=4.0.0
 flask>=2.0.0
+numpy>=1.20.0    # FIXED: Required by imagehash (was listed as optional)
 
 # Optional but recommended
 tqdm>=4.0.0      # Progress bars
-numpy>=1.20.0    # Better performance for imagehash

@@ -8,7 +8,9 @@ import os
 import shutil
 import threading
 import time
+import logging
 from datetime import datetime
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_file, render_template
 
@@ -26,9 +28,15 @@ from .database import get_cache
 # Create blueprint for routes
 api = Blueprint('api', __name__)
 
+# Module logger
+_logger = logging.getLogger(__name__)
+
 # Threshold for auto-disabling perceptual matching in GUI
 # Perceptual matching is O(n²), so 50K images = 1.25 billion comparisons
 PERCEPTUAL_AUTO_DISABLE_THRESHOLD = 50000
+
+# FIXED #3: Lock for thread-safe state persistence
+_state_lock = threading.Lock()
 
 
 def format_number(n: int) -> str:
@@ -46,6 +54,72 @@ def format_time_estimate(seconds: float) -> str:
         hours = int(seconds / 3600)
         minutes = int((seconds % 3600) / 60)
         return f"{hours}h {minutes}m"
+
+
+def _safe_save_state():
+    """
+    FIXED #3: Thread-safe state save to prevent JSON corruption.
+    """
+    with _state_lock:
+        scan_state.save()
+
+
+def _validate_path_in_directory(filepath: str, base_directory: str) -> bool:
+    """
+    FIXED #10: Validate that a file path is within the expected base directory.
+    
+    Prevents path traversal attacks where user input could access files
+    outside the scanned directory.
+    
+    Args:
+        filepath: The file path to validate
+        base_directory: The allowed base directory
+        
+    Returns:
+        True if the path is within the base directory, False otherwise
+    """
+    try:
+        # Resolve both paths to absolute canonical paths
+        file_resolved = Path(filepath).resolve()
+        base_resolved = Path(base_directory).resolve()
+        
+        # Check if the file path starts with the base directory
+        return str(file_resolved).startswith(str(base_resolved) + os.sep) or \
+               str(file_resolved) == str(base_resolved)
+    except Exception:
+        return False
+
+
+def _validate_file_accessible(filepath: str) -> tuple[bool, str]:
+    """
+    FIXED #2: Validate that a file exists and is accessible before operations.
+    
+    Args:
+        filepath: Path to validate
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not os.path.exists(filepath):
+        return False, "File does not exist"
+    
+    if not os.path.isfile(filepath):
+        return False, "Path is not a file"
+    
+    if not os.access(filepath, os.R_OK):
+        return False, "File is not readable (permission denied)"
+    
+    # Check if file is locked (Windows-specific, but gracefully handles Unix)
+    try:
+        # Try to open file for reading to verify it's not locked
+        with open(filepath, 'rb') as f:
+            pass
+    except PermissionError:
+        return False, "File is locked by another process"
+    except IOError as e:
+        return False, f"Cannot access file: {e}"
+    
+    return True, ""
 
 
 def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: bool):
@@ -82,27 +156,35 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
         if not image_files:
             scan_state.status = 'complete'
             scan_state.message = 'No images found in directory'
-            scan_state.save()
+            _safe_save_state()  # FIXED #3: Use thread-safe save
             return
         
-        # Check if we should auto-disable perceptual matching for large collections
+        # FIXED #9: Check if we should auto-disable perceptual matching with clear warning
         if (not exact_only and not perceptual_only and 
             len(image_files) > PERCEPTUAL_AUTO_DISABLE_THRESHOLD):
             auto_disabled_perceptual = True
             exact_only = True
-            scan_state.message = (
-                f'Large collection ({format_number(len(image_files))} images). '
-                f'Running exact match only for responsiveness. '
-                f'Use CLI with --threshold {threshold} for perceptual matching.'
+            
+            # FIXED #9: More prominent warning message
+            warning_msg = (
+                f'⚠️ LARGE COLLECTION DETECTED ({format_number(len(image_files))} images). '
+                f'Perceptual matching has been automatically disabled to prevent '
+                f'excessive processing time. Running exact match only. '
+                f'For perceptual matching on large collections, use CLI with LSH: '
+                f'`dupefinder cli "{directory}" --threshold {threshold}`'
             )
+            scan_state.message = warning_msg
             scan_state.settings['exact_only'] = True
             scan_state.settings['auto_disabled_perceptual'] = True
-            time.sleep(2)  # Give user time to see the message
+            _safe_save_state()  # FIXED #3: Use thread-safe save
+            
+            # FIXED #9: Increased delay for user to see the warning
+            time.sleep(4)
         
         # Analyze images (with caching for faster re-scans)
         scan_state.status = 'analyzing'
         scan_state.message = f'Analyzing {format_number(len(image_files))} images...'
-        scan_state.save()
+        _safe_save_state()  # FIXED #3: Use thread-safe save
         
         analysis_start_time = time.time()
         last_save_time = time.time()
@@ -135,9 +217,9 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
                     )
                 last_progress_update = current_time
             
-            # Save state every 5 seconds
+            # FIXED #3: Save state every 5 seconds with thread-safe method
             if current_time - last_save_time > 5:
-                scan_state.save()
+                _safe_save_state()
                 last_save_time = current_time
         
         # Use the cached parallel analyzer
@@ -151,7 +233,7 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
         
         # Show cache stats in log
         if cache_stats.cache_hits > 0:
-            print(f"Cache: {cache_stats.cache_hits:,} hits, {cache_stats.cache_misses:,} misses "
+            _logger.info(f"Cache: {cache_stats.cache_hits:,} hits, {cache_stats.cache_misses:,} misses "
                   f"({cache_stats.hit_rate:.1f}% hit rate)")
         
         # Separate valid images from errors
@@ -165,12 +247,12 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
         if not valid_images:
             scan_state.status = 'complete'
             scan_state.message = f'No valid images could be analyzed ({error_count} errors)'
-            scan_state.save()
+            _safe_save_state()  # FIXED #3: Use thread-safe save
             return
         
         # Log error count if significant
         if error_count > 0:
-            print(f"Warning: {error_count} images could not be analyzed")
+            _logger.warning(f"Warning: {error_count} images could not be analyzed")
         
         # Find exact duplicates
         exact_groups = []
@@ -190,7 +272,7 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             )
         
         scan_state.progress = 60
-        scan_state.save()
+        _safe_save_state()  # FIXED #3: Use thread-safe save
         
         # Find perceptual duplicates
         perceptual_groups = []
@@ -265,17 +347,18 @@ def run_scan(directory: str, threshold: int, exact_only: bool, perceptual_only: 
             summary_parts.append(f'• {format_number(error_count)} files had errors')
         
         if auto_disabled_perceptual:
-            summary_parts.append('• Perceptual matching skipped for large collection')
+            summary_parts.append('• ⚠️ Perceptual matching was skipped for large collection')
         
         scan_state.message = ' '.join(summary_parts)
         scan_state.last_updated = datetime.now().isoformat()
         
-        scan_state.save()
+        _safe_save_state()  # FIXED #3: Use thread-safe save
         
     except Exception as e:
         scan_state.status = 'error'
         scan_state.message = f'Error: {str(e)}'
-        scan_state.save()
+        _logger.exception(f"Scan error: {e}")
+        _safe_save_state()  # FIXED #3: Use thread-safe save
 
 
 # =============================================================================
@@ -296,6 +379,19 @@ def api_scan():
     threshold = data.get('threshold', 10)
     exact_only = data.get('exactOnly', False)
     perceptual_only = data.get('perceptualOnly', False)
+    
+    # FIXED #2: Validate directory exists and is accessible
+    if not directory:
+        return jsonify({'error': 'No directory specified'}), 400
+    
+    if not os.path.exists(directory):
+        return jsonify({'error': f'Directory does not exist: {directory}'}), 400
+    
+    if not os.path.isdir(directory):
+        return jsonify({'error': f'Path is not a directory: {directory}'}), 400
+    
+    if not os.access(directory, os.R_OK):
+        return jsonify({'error': f'Cannot read directory (permission denied): {directory}'}), 400
     
     # Start scan in background thread
     thread = threading.Thread(
@@ -342,7 +438,7 @@ def api_selections():
     """Save user selections."""
     data = request.json
     scan_state.selections = data.get('selections', {})
-    scan_state.save()
+    _safe_save_state()  # FIXED #3: Use thread-safe save
     return jsonify({'status': 'saved'})
 
 
@@ -358,6 +454,13 @@ def api_clear():
 def api_image():
     """Serve an image file for preview."""
     path = request.args.get('path', '')
+    
+    # FIXED #10: Validate path is within scanned directory
+    if scan_state.directory:
+        if not _validate_path_in_directory(path, scan_state.directory):
+            _logger.warning(f"Blocked access to file outside scan directory: {path}")
+            return jsonify({'error': 'Access denied: file outside scan directory'}), 403
+    
     if os.path.exists(path):
         return send_file(path)
     return '', 404
@@ -373,32 +476,76 @@ def api_delete():
     if not trash_dir:
         return jsonify({'error': 'No trash directory specified'}), 400
     
-    # Create trash dir
-    os.makedirs(trash_dir, exist_ok=True)
+    # FIXED #10: Validate all file paths are within the scanned directory
+    if scan_state.directory:
+        invalid_paths = []
+        for filepath in files:
+            if not _validate_path_in_directory(filepath, scan_state.directory):
+                invalid_paths.append(filepath)
+        
+        if invalid_paths:
+            _logger.warning(f"Blocked deletion of files outside scan directory: {invalid_paths}")
+            return jsonify({
+                'error': 'Security error: some files are outside the scanned directory',
+                'invalid_paths': invalid_paths
+            }), 403
+    
+    # FIXED #2: Validate and create trash directory with proper error handling
+    try:
+        os.makedirs(trash_dir, exist_ok=True)
+    except PermissionError:
+        return jsonify({'error': f'Cannot create trash directory (permission denied): {trash_dir}'}), 400
+    except OSError as e:
+        return jsonify({'error': f'Cannot create trash directory: {e}'}), 400
     
     moved = 0
     errors = 0
+    error_details = []
     
     for filepath in files:
         try:
-            if os.path.exists(filepath):
-                filename = os.path.basename(filepath)
-                dest = os.path.join(trash_dir, filename)
-                
-                # Handle name conflicts
-                counter = 1
-                base, ext = os.path.splitext(filename)
-                while os.path.exists(dest):
-                    dest = os.path.join(trash_dir, f"{base}_{counter}{ext}")
-                    counter += 1
-                
-                shutil.move(filepath, dest)
-                moved += 1
+            # FIXED #2: Validate file is accessible before attempting move
+            is_valid, error_msg = _validate_file_accessible(filepath)
+            if not is_valid:
+                errors += 1
+                error_details.append({'path': filepath, 'error': error_msg})
+                _logger.warning(f"Cannot move {filepath}: {error_msg}")
+                continue
+            
+            filename = os.path.basename(filepath)
+            dest = os.path.join(trash_dir, filename)
+            
+            # Handle name conflicts
+            counter = 1
+            base, ext = os.path.splitext(filename)
+            while os.path.exists(dest):
+                dest = os.path.join(trash_dir, f"{base}_{counter}{ext}")
+                counter += 1
+            
+            shutil.move(filepath, dest)
+            moved += 1
+            
+        except PermissionError as e:
+            errors += 1
+            error_details.append({'path': filepath, 'error': 'Permission denied'})
+            _logger.warning(f"Permission denied moving {filepath}: {e}")
+        except FileNotFoundError:
+            errors += 1
+            error_details.append({'path': filepath, 'error': 'File not found (may have been deleted)'})
+        except OSError as e:
+            errors += 1
+            error_details.append({'path': filepath, 'error': str(e)})
+            _logger.warning(f"OS error moving {filepath}: {e}")
         except Exception as e:
             errors += 1
-            print(f"Error moving {filepath}: {e}")
+            error_details.append({'path': filepath, 'error': str(e)})
+            _logger.exception(f"Unexpected error moving {filepath}: {e}")
     
-    return jsonify({'moved': moved, 'errors': errors})
+    response = {'moved': moved, 'errors': errors}
+    if error_details:
+        response['error_details'] = error_details
+    
+    return jsonify(response)
 
 
 @api.route('/api/cache/stats')
