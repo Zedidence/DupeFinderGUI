@@ -6,7 +6,7 @@ A comprehensive tool for finding duplicate and visually similar images with both
 
 - **Multi-stage detection**: Exact hash matching + perceptual hash for visually similar images
 - **LSH acceleration**: O(n) perceptual matching instead of O(n²) for large collections
-- **40+ image formats supported**: Including RAW formats (CR2, NEF, ARW, DNG, etc.)
+- **45+ image formats supported**: Including RAW formats (CR2, NEF, ARW, DNG, etc.) and modern formats (HEIC/HEIF)
 - **Quality-based selection**: Automatically identifies the highest quality version to keep
 - **SQLite caching**: Re-scans are 10-100x faster by caching analysis results
 - **Large collection support**: Handles 650K+ images efficiently
@@ -37,6 +37,7 @@ pip install -e .
 - imagehash
 - Flask (for GUI)
 - numpy (required by imagehash)
+- pillow-heif (for HEIC/HEIF support)
 - tqdm (optional, for progress bars)
 
 ## Usage
@@ -103,6 +104,23 @@ python -m dupefinder cli /path/to/photos --no-cache
 | `--export-format FMT` | Export format: txt or csv |
 | `--no-cache` | Disable SQLite caching |
 | `-v, --verbose` | Verbose output |
+
+## HEIC/HEIF Support
+
+DupeFinder supports Apple's HEIC/HEIF image formats through the `pillow-heif` library:
+
+```bash
+# Install HEIC support
+pip install pillow-heif
+```
+
+If `pillow-heif` is not installed, HEIC/HEIF files will be skipped with a warning. All other formats will continue to work normally.
+
+**Supported modern formats:**
+- HEIC/HEIF (requires pillow-heif)
+- WebP
+- AVIF
+- JPEG XL
 
 ## LSH Acceleration
 
@@ -202,8 +220,7 @@ dupefinder/
 ├── routes.py        # Flask API routes
 ├── app.py           # GUI application entry point
 ├── cli.py           # Command-line interface
-├── templates/
-│   └── index.html   # Web GUI template
+├── index.html       # Web GUI template (embedded in package)
 ├── requirements.txt
 ├── setup.py
 └── README.md
@@ -256,7 +273,12 @@ from dupefinder import (
     get_cache,
     HammingLSH,
     LSH_AUTO_THRESHOLD,
+    has_heif_support,
 )
+
+# Check for HEIC support
+if not has_heif_support():
+    print("Warning: HEIC/HEIF support not available")
 
 # Find all images
 images = find_image_files("/path/to/photos")
@@ -330,6 +352,18 @@ Try lowering the threshold (e.g., `--threshold 5`) for stricter matching, or rai
 ### LSH is missing some duplicates
 LSH is probabilistic and may occasionally miss edge-case duplicates at exactly the threshold distance. For critical applications, use `--no-lsh` to force brute-force comparison, or lower the threshold slightly.
 
+### HEIC files not being processed
+Install HEIC support:
+```bash
+pip install pillow-heif
+```
+
+Or if already installed, verify it's working:
+```python
+from dupefinder import has_heif_support
+print(has_heif_support())  # Should print True
+```
+
 ## License
 
 MIT License - feel free to use and modify!
@@ -338,7 +372,17 @@ MIT License - feel free to use and modify!
 
 Created by Zach
 
+GitHub Repository: [Zedidence/DupeFinderGUI](https://github.com/Zedidence/DupeFinderGUI)
+
 ## Changelog
+
+### v2.1.0 (Current)
+- **HEIC/HEIF format support** via pillow-heif
+- Added `has_heif_support()` API function
+- Updated dependencies to include pillow-heif
+- Graceful fallback when HEIC support not installed
+- Support for modern image formats (WebP, AVIF, JPEG XL)
+- Improved error handling for corrupt/truncated images
 
 ### v1.2.0
 - **LSH acceleration for perceptual matching** - O(n) instead of O(n²)
