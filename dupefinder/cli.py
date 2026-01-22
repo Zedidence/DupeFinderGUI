@@ -296,7 +296,25 @@ Examples:
         action='store_true',
         help='Only find perceptual duplicates (skip exact matching)'
     )
-    
+
+    parser.add_argument(
+        '--lsh',
+        action='store_true',
+        help='Force LSH acceleration on (overrides auto-selection)'
+    )
+
+    parser.add_argument(
+        '--no-lsh',
+        action='store_true',
+        help='Force brute-force comparison, disable LSH (overrides auto-selection)'
+    )
+
+    parser.add_argument(
+        '--no-cache',
+        action='store_true',
+        help='Disable SQLite caching (analyze all images fresh)'
+    )
+
     parser.add_argument(
         '-a', '--action',
         choices=['report', 'delete', 'move', 'hardlink', 'symlink'],
@@ -379,15 +397,34 @@ Examples:
     if not args.directory.exists():
         logger.error(f"Directory not found: {args.directory}")
         sys.exit(1)
-    
+
     if args.action == 'move' and not args.trash_dir:
         logger.error("--trash-dir required for 'move' action")
         sys.exit(1)
-    
+
     if args.trash_dir and not args.trash_dir.exists():
         args.trash_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created trash directory: {args.trash_dir}")
-    
+
+    # Validate mutually exclusive flags
+    if args.lsh and args.no_lsh:
+        logger.error("Cannot use both --lsh and --no-lsh")
+        sys.exit(1)
+
+    # Determine LSH usage
+    use_lsh = None  # Auto-select by default
+    if args.lsh:
+        use_lsh = True
+        logger.info("LSH acceleration forced on")
+    elif args.no_lsh:
+        use_lsh = False
+        logger.info("LSH disabled (brute-force mode)")
+
+    # Determine cache usage
+    use_cache = not args.no_cache
+    if args.no_cache:
+        logger.info("Cache disabled - analyzing all images fresh")
+
     show_progress = not args.no_progress
     
     # Find images
@@ -406,13 +443,19 @@ Examples:
     
     # Analyze images
     logger.info("Analyzing images (this may take a while)...")
-    images = analyze_images_parallel(
-        image_files, 
+    images, cache_stats = analyze_images_parallel(
+        image_files,
         max_workers=args.workers,
         logger=logger,
-        show_progress=show_progress
+        show_progress=show_progress,
+        use_cache=use_cache
     )
-    
+
+    # Show cache stats if cache was used
+    if use_cache and cache_stats.cache_hits > 0:
+        logger.info(f"Cache: {cache_stats.cache_hits:,} hits, {cache_stats.cache_misses:,} misses "
+                   f"({cache_stats.hit_rate:.1f}% hit rate)")
+
     # Filter out errors
     valid_images = [img for img in images if not img.error]
     error_count = len(images) - len(valid_images)
@@ -437,7 +480,9 @@ Examples:
             threshold=args.threshold,
             exclude_hashes=exact_hashes,
             start_id=len(exact_groups) + 1,
-            show_progress=show_progress
+            show_progress=show_progress,
+            use_lsh=use_lsh,
+            logger=logger
         )
         logger.info(f"Found {len(perceptual_groups)} perceptual duplicate groups")
     

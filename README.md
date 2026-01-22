@@ -340,20 +340,18 @@ Created by Zach
 
 ## Changelog
 
-### v1.2.0
+### v2.0.0 (Current)
 - **LSH acceleration for perceptual matching** - O(n) instead of O(n²)
-- Auto-enables for collections ≥5,000 images
+- **SQLite caching** for 10-100x faster re-scans
+- Auto-enables LSH for collections ≥5,000 images
 - 20-1000x speedup for large collections
+- Automatic optimization for large collections (50K+ images)
+- Cache management UI in web interface
+- Cache-related API endpoints
+- Improved progress messages with ETA and processing rate
+- Formatted numbers (commas) for better readability
 - New `--lsh` and `--no-lsh` CLI options
 - Updated GUI to show LSH status
-
-### v1.1.0
-- Added SQLite caching for 10-100x faster re-scans
-- Added automatic optimization for large collections (50K+ images)
-- Added cache management UI in web interface
-- Added cache-related API endpoints
-- Improved progress messages with ETA and processing rate
-- Added formatted numbers (commas) for better readability
 
 ### v1.0.0
 - Initial release with GUI and CLI

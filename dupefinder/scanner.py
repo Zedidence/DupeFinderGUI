@@ -98,11 +98,11 @@ def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]
 def calculate_file_hash(filepath: str | Path, algorithm: str = 'sha256') -> str:
     """
     Calculate cryptographic hash of a file.
-    
+
     Args:
         filepath: Path to the file
         algorithm: Hash algorithm to use (default: sha256)
-        
+
     Returns:
         Hex digest of the file hash, or empty string on error
     """
@@ -112,20 +112,21 @@ def calculate_file_hash(filepath: str | Path, algorithm: str = 'sha256') -> str:
             for chunk in iter(lambda: f.read(65536), b''):
                 hasher.update(chunk)
         return hasher.hexdigest()
-    except Exception:
+    except Exception as e:
+        logging.debug(f"Failed to calculate hash for {filepath}: {e}")
         return ""
 
 
 def calculate_perceptual_hash(filepath: str | Path, hash_size: int = 16) -> Optional[str]:
     """
     Calculate perceptual hash of an image.
-    
+
     Uses pHash algorithm which is most accurate for photos.
-    
+
     Args:
         filepath: Path to the image
         hash_size: Size of the hash (default 16, resulting in 256-bit hash)
-        
+
     Returns:
         String representation of the perceptual hash, or None on error
     """
@@ -136,7 +137,8 @@ def calculate_perceptual_hash(filepath: str | Path, hash_size: int = 16) -> Opti
                 img = img.convert('RGB')
             phash = imagehash.phash(img, hash_size=hash_size)
             return str(phash)
-    except Exception:
+    except Exception as e:
+        logging.debug(f"Failed to calculate perceptual hash for {filepath}: {e}")
         return None
 
 

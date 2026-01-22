@@ -12,6 +12,7 @@ The cache uses file path + mtime + size as a cache key to detect changes.
 import sqlite3
 import os
 import time
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Generator
@@ -19,6 +20,8 @@ from dataclasses import dataclass
 
 from .config import CACHE_DB_FILE
 from .models import ImageInfo
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -233,8 +236,9 @@ class ImageCache:
                     )
             
             return None
-            
-        except Exception:
+
+        except Exception as e:
+            logger.debug(f"Failed to get cached info for {filepath}: {e}")
             return None
     
     def put(self, info: ImageInfo) -> bool:
@@ -270,8 +274,9 @@ class ImageCache:
                 ))
             
             return True
-            
-        except Exception:
+
+        except Exception as e:
+            logger.debug(f"Failed to cache image info for {info.path}: {e}")
             return False
     
     def put_batch(self, images: list[ImageInfo]) -> int:
@@ -314,9 +319,9 @@ class ImageCache:
                     except Exception:
                         continue
             
-        except Exception:
-            pass
-        
+        except Exception as e:
+            logger.warning(f"Error during batch caching: {e}")
+
         return cached
     
     def get_batch(self, filepaths: list[str]) -> dict[str, Optional[ImageInfo]]:
@@ -378,9 +383,9 @@ class ImageCache:
                         WHERE cache_key IN ({placeholders})
                     """, hit_keys)
         
-        except Exception:
-            pass
-        
+        except Exception as e:
+            logger.warning(f"Error during batch retrieval: {e}")
+
         return results
     
     def invalidate(self, filepath: str):
@@ -388,8 +393,8 @@ class ImageCache:
         try:
             with self._conn() as conn:
                 conn.execute("DELETE FROM images WHERE path = ?", (filepath,))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to invalidate cache for {filepath}: {e}")
     
     def invalidate_directory(self, directory: str):
         """Remove all cached entries for files in a directory."""
@@ -399,13 +404,13 @@ class ImageCache:
                     "DELETE FROM images WHERE path LIKE ?",
                     (f"{directory}%",)
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to invalidate cache for directory {directory}: {e}")
     
     def cleanup_stale(self, max_age_days: int = 30):
         """
         Remove cache entries that haven't been accessed recently.
-        
+
         Args:
             max_age_days: Remove entries not accessed in this many days
         """
@@ -417,13 +422,14 @@ class ImageCache:
                     (cutoff,)
                 )
                 return result.rowcount
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to cleanup stale cache entries: {e}")
             return 0
     
     def cleanup_missing(self) -> int:
         """
         Remove cache entries for files that no longer exist.
-        
+
         Returns:
             Number of entries removed
         """
@@ -432,16 +438,17 @@ class ImageCache:
                 # Get all paths
                 rows = conn.execute("SELECT path FROM images").fetchall()
                 missing = [row['path'] for row in rows if not os.path.exists(row['path'])]
-                
+
                 if missing:
                     placeholders = ','.join('?' * len(missing))
                     conn.execute(
                         f"DELETE FROM images WHERE path IN ({placeholders})",
                         missing
                     )
-                
+
                 return len(missing)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to cleanup missing cache entries: {e}")
             return 0
     
     def get_stats(self) -> dict:
@@ -449,17 +456,18 @@ class ImageCache:
         try:
             with self._conn() as conn:
                 total = conn.execute("SELECT COUNT(*) as cnt FROM images").fetchone()['cnt']
-                
+
                 # Size on disk
                 db_size = os.path.getsize(self.db_path) if os.path.exists(self.db_path) else 0
-                
+
                 return {
                     'total_entries': total,
                     'db_size_bytes': db_size,
                     'db_size_mb': round(db_size / (1024 * 1024), 2),
                     'db_path': self.db_path,
                 }
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to get cache stats: {e}")
             return {
                 'total_entries': 0,
                 'db_size_bytes': 0,
@@ -474,16 +482,16 @@ class ImageCache:
                 conn.execute("DELETE FROM images")
                 conn.execute("DELETE FROM scan_history")
                 conn.execute("VACUUM")
-        except Exception:
-            pass
-    
+        except Exception as e:
+            logger.warning(f"Failed to clear cache: {e}")
+
     def vacuum(self):
         """Compact the database file."""
         try:
             with self._conn() as conn:
                 conn.execute("VACUUM")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to vacuum database: {e}")
 
 
 # Global cache instance

@@ -10,6 +10,15 @@ Or build distribution:
 
 from setuptools import setup, find_packages
 from pathlib import Path
+import re
+
+# Read version from __init__.py (single source of truth)
+init_path = Path(__file__).parent / "dupefinder" / "__init__.py"
+with open(init_path, encoding="utf-8") as f:
+    version_match = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', f.read(), re.MULTILINE)
+    if not version_match:
+        raise RuntimeError("Unable to find version string.")
+    version = version_match.group(1)
 
 # Read README for long description
 readme_path = Path(__file__).parent / "README.md"
@@ -19,7 +28,7 @@ if readme_path.exists():
 
 setup(
     name="dupefinder",
-    version="1.0.0",
+    version=version,
     author="Zach Daly",
     description="A comprehensive tool for finding duplicate and visually similar images",
     long_description=long_description,
