@@ -103,7 +103,7 @@
             gap: 10px;
         }
         
-        /* Warning Banner for auto-disabled perceptual */
+        /* Warning Banner */
         .warning-banner {
             background: linear-gradient(135deg, #2d3436, #1a1a2e);
             border: 1px solid #f39c12;
@@ -142,10 +142,14 @@
             border-radius: 8px;
             padding: 12px 20px;
             margin-bottom: 20px;
-            display: flex;
+            display: none;
             align-items: center;
             font-size: 0.9rem;
             color: #27ae60;
+        }
+        
+        .cache-banner.active {
+            display: flex;
         }
         
         /* Setup Panel */
@@ -169,7 +173,8 @@
         }
         
         .form-group input[type="text"],
-        .form-group input[type="number"] {
+        .form-group input[type="number"],
+        .form-group select {
             width: 100%;
             padding: 12px 16px;
             border: 2px solid #333;
@@ -179,9 +184,16 @@
             font-size: 1rem;
         }
         
-        .form-group input:focus {
+        .form-group input:focus,
+        .form-group select:focus {
             outline: none;
             border-color: #4a9eff;
+        }
+        
+        .form-group small {
+            color: #666;
+            margin-top: 4px;
+            display: block;
         }
         
         /* Directory Autocomplete */
@@ -244,6 +256,51 @@
             cursor: pointer;
         }
         
+        /* Advanced Options */
+        .advanced-options {
+            margin-top: 20px;
+            border-top: 1px solid #333;
+            padding-top: 20px;
+        }
+        
+        .advanced-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #888;
+            cursor: pointer;
+            font-size: 0.95rem;
+            margin-bottom: 15px;
+            user-select: none;
+        }
+        
+        .advanced-toggle:hover {
+            color: #4a9eff;
+        }
+        
+        .advanced-toggle .arrow {
+            transition: transform 0.3s;
+        }
+        
+        .advanced-toggle.expanded .arrow {
+            transform: rotate(90deg);
+        }
+        
+        .advanced-content {
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
+        
+        .advanced-content.active {
+            display: block;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Buttons */
         .btn {
             padding: 14px 28px;
             border: none;
@@ -279,6 +336,15 @@
             background: #c0392b;
         }
         
+        .btn-warning {
+            background: #f39c12;
+            color: #fff;
+        }
+        
+        .btn-warning:hover {
+            background: #d68910;
+        }
+        
         .btn-success {
             background: #27ae60;
             color: #fff;
@@ -294,22 +360,112 @@
             font-size: 0.9rem;
         }
         
-        /* Progress */
-        .progress-container {
-            margin-top: 20px;
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        /* Progress Section */
+        .progress-section {
+            margin-top: 30px;
             display: none;
         }
         
-        .progress-container.active {
+        .progress-section.active {
             display: block;
         }
         
-        .progress-bar {
-            height: 8px;
+        /* Stage Indicators */
+        .stage-indicators {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .stage-indicators::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 3px;
             background: #333;
-            border-radius: 4px;
+            z-index: 0;
+        }
+        
+        .stage-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 1;
+            flex: 1;
+        }
+        
+        .stage-dot {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #333;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+            transition: all 0.3s;
+        }
+        
+        .stage-indicator.active .stage-dot {
+            background: #4a9eff;
+            box-shadow: 0 0 20px rgba(74, 158, 255, 0.5);
+        }
+        
+        .stage-indicator.completed .stage-dot {
+            background: #27ae60;
+        }
+        
+        .stage-indicator.error .stage-dot {
+            background: #e74c3c;
+        }
+        
+        .stage-label {
+            font-size: 0.85rem;
+            color: #666;
+            text-align: center;
+        }
+        
+        .stage-indicator.active .stage-label,
+        .stage-indicator.completed .stage-label {
+            color: #fff;
+        }
+        
+        /* Progress Bar */
+        .progress-container {
+            margin-bottom: 20px;
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .progress-title {
+            font-weight: 600;
+        }
+        
+        .progress-percentage {
+            color: #4a9eff;
+            font-weight: 600;
+        }
+        
+        .progress-bar {
+            height: 12px;
+            background: #333;
+            border-radius: 6px;
             overflow: hidden;
-            margin-bottom: 10px;
+            position: relative;
         }
         
         .progress-fill {
@@ -317,22 +473,91 @@
             background: linear-gradient(90deg, #4a9eff, #6c5ce7);
             width: 0%;
             transition: width 0.3s;
+            position: relative;
+        }
+        
+        .progress-fill.animated {
+            background-image: linear-gradient(
+                -45deg,
+                rgba(255,255,255,0.15) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255,255,255,0.15) 50%,
+                rgba(255,255,255,0.15) 75%,
+                transparent 75%,
+                transparent
+            );
+            background-size: 40px 40px;
+            animation: progressStripe 1s linear infinite;
+        }
+        
+        @keyframes progressStripe {
+            from { background-position: 0 0; }
+            to { background-position: 40px 0; }
         }
         
         .progress-text {
             color: #888;
             font-size: 0.9rem;
+            margin-top: 8px;
+        }
+        
+        /* Live Stats */
+        .live-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+            padding: 20px;
+            background: #0f0f23;
+            border-radius: 10px;
+        }
+        
+        .live-stat {
+            text-align: center;
+        }
+        
+        .live-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #4a9eff;
+        }
+        
+        .live-stat-value.cache {
+            color: #27ae60;
+        }
+        
+        .live-stat-value.error {
+            color: #e74c3c;
+        }
+        
+        .live-stat-label {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        /* Scan Controls */
+        .scan-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
         }
         
         /* Stats Bar */
         .stats-bar {
-            display: flex;
+            display: none;
             gap: 20px;
             flex-wrap: wrap;
             margin-bottom: 30px;
             padding: 20px;
             background: #16213e;
             border-radius: 12px;
+        }
+        
+        .stats-bar.active {
+            display: flex;
         }
         
         .stat-item {
@@ -358,11 +583,15 @@
         
         /* Filter/Sort Bar */
         .filter-bar {
-            display: flex;
+            display: none;
             gap: 15px;
             margin-bottom: 20px;
             flex-wrap: wrap;
             align-items: center;
+        }
+        
+        .filter-bar.active {
+            display: flex;
         }
         
         .filter-bar select {
@@ -425,10 +654,6 @@
             overflow: hidden;
         }
         
-        .group-card.focused {
-            box-shadow: 0 0 0 3px #4a9eff;
-        }
-        
         .group-header {
             display: flex;
             justify-content: space-between;
@@ -456,10 +681,6 @@
         
         .group-badge.perceptual {
             background: #f39c12;
-        }
-        
-        .group-badge.error {
-            background: #e74c3c;
         }
         
         .group-images {
@@ -492,29 +713,11 @@
             opacity: 0.7;
         }
         
-        .image-card.error-card {
-            border-color: #e74c3c;
-            cursor: default;
-        }
-        
-        .image-card.keyboard-focus {
-            outline: 3px dashed #f39c12;
-            outline-offset: 3px;
-        }
-        
         .image-preview {
             width: 100%;
             height: 200px;
             object-fit: contain;
             background: #000;
-        }
-        
-        .image-preview.error {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #e74c3c;
-            font-size: 0.9rem;
         }
         
         .image-info {
@@ -576,17 +779,8 @@
             border-radius: 3px;
         }
         
-        .image-actions {
-            padding: 10px 15px;
-            background: #1a1a3e;
-            display: flex;
-            gap: 10px;
-        }
-        
-        .image-actions .btn {
-            flex: 1;
-            padding: 8px;
-            font-size: 0.85rem;
+        .image-wrapper {
+            position: relative;
         }
         
         .keep-badge {
@@ -611,34 +805,6 @@
             border-radius: 4px;
             font-size: 0.75rem;
             font-weight: 600;
-        }
-        
-        .error-badge {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #e74c3c;
-            color: #fff;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .image-wrapper {
-            position: relative;
-        }
-        
-        /* Error Message Display */
-        .error-message {
-            background: rgba(231, 76, 60, 0.1);
-            border: 1px solid #e74c3c;
-            border-radius: 6px;
-            padding: 10px;
-            margin-top: 10px;
-            font-size: 0.8rem;
-            color: #e74c3c;
-            word-break: break-all;
         }
         
         /* Error Section */
@@ -728,12 +894,16 @@
             background: #16213e;
             border-top: 1px solid #333;
             padding: 20px;
-            display: flex;
+            display: none;
             justify-content: space-between;
             align-items: center;
             gap: 20px;
             flex-wrap: wrap;
             z-index: 100;
+        }
+        
+        .action-bar.active {
+            display: flex;
         }
         
         .action-summary {
@@ -746,25 +916,25 @@
             flex-wrap: wrap;
         }
         
-        /* Undo Toast */
-        .undo-toast {
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #333;
-            color: #fff;
-            padding: 12px 24px;
-            border-radius: 8px;
-            display: none;
+        /* Strategy Selector */
+        .strategy-selector {
+            display: flex;
             align-items: center;
-            gap: 15px;
-            z-index: 1001;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            gap: 10px;
         }
         
-        .undo-toast.active {
-            display: flex;
+        .strategy-selector label {
+            color: #888;
+            font-size: 0.9rem;
+        }
+        
+        .strategy-selector select {
+            padding: 8px 12px;
+            border: 2px solid #333;
+            border-radius: 6px;
+            background: #0f0f23;
+            color: #fff;
+            font-size: 0.85rem;
         }
         
         /* Modal */
@@ -775,11 +945,10 @@
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.8);
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
             z-index: 1000;
-            display: none;
         }
         
         .modal-overlay.active {
@@ -872,25 +1041,57 @@
             margin-bottom: 10px;
         }
         
-        /* Keyboard Shortcuts Help */
-        .keyboard-help {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: #16213e;
-            padding: 15px 20px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            color: #888;
-            z-index: 50;
+        /* Range Slider */
+        .range-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         
-        .keyboard-help kbd {
+        .range-container input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 8px;
             background: #333;
-            padding: 2px 8px;
             border-radius: 4px;
-            font-family: monospace;
+            outline: none;
+        }
+        
+        .range-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4a9eff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .range-value {
+            min-width: 40px;
+            text-align: center;
+            font-weight: 600;
+            color: #4a9eff;
+        }
+        
+        /* Undo Toast */
+        .undo-toast {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
             color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            display: none;
+            align-items: center;
+            gap: 15px;
+            z-index: 1001;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .undo-toast.active {
+            display: flex;
         }
         
         @media (max-width: 768px) {
@@ -907,10 +1108,6 @@
                 text-align: center;
             }
             
-            .keyboard-help {
-                display: none;
-            }
-            
             .filter-bar {
                 flex-direction: column;
                 align-items: stretch;
@@ -919,6 +1116,15 @@
             .pagination {
                 margin-left: 0;
                 justify-content: center;
+            }
+            
+            .stage-indicators {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            
+            .stage-indicator {
+                flex: 0 0 auto;
             }
         }
     </style>
@@ -932,13 +1138,13 @@
     
     <div class="container">
         <header>
-            <h1>&#128269; Duplicate Image Finder</h1>
+            <h1>🔍 Duplicate Image Finder</h1>
             <p>Find and manage duplicate images with ease</p>
         </header>
         
         <!-- Session Recovery Banner -->
         <div class="recovery-banner" id="recoveryBanner">
-            <h3>&#128194; Previous Session Found</h3>
+            <h3>📂 Previous Session Found</h3>
             <p id="recoveryInfo">You have results from a previous scan. Would you like to restore them?</p>
             <div class="btn-group">
                 <button class="btn btn-primary btn-sm" onclick="restoreSession()">Restore Session</button>
@@ -946,18 +1152,17 @@
             </div>
         </div>
         
-        <!-- Warning Banner for large collections -->
+        <!-- Warning Banner -->
         <div class="warning-banner" id="warningBanner">
-            <h3>&#9888; Large Collection - Perceptual Matching Disabled</h3>
-            <p id="warningInfo">This collection has over 50,000 images. Perceptual matching was automatically disabled for responsiveness.</p>
-            <p>To find visually similar (not just identical) duplicates, use the CLI:</p>
-            <p><code id="cliCommand">python -m dupefinder cli /path/to/dir --threshold 10</code></p>
+            <h3>⚠️ Large Collection - Perceptual Matching Disabled</h3>
+            <p id="warningInfo">This collection has over 50,000 images. Perceptual matching was automatically disabled.</p>
+            <p>Enable LSH in Advanced Options to process large collections with perceptual matching.</p>
         </div>
         
         <!-- Setup Panel -->
         <div class="setup-panel" id="setupPanel">
             <div class="form-group">
-                <label for="directory">&#128193; Directory to Scan</label>
+                <label for="directory">📁 Directory to Scan</label>
                 <input type="text" id="directory" placeholder="Enter full path (e.g., C:\Users\Photos or /home/user/photos)" 
                        autocomplete="off" onfocus="showHistory()" oninput="filterHistory()">
                 <div class="autocomplete-list" id="historyList"></div>
@@ -965,9 +1170,24 @@
             
             <div class="form-row">
                 <div class="form-group">
-                    <label for="threshold">&#127919; Similarity Threshold (0-64)</label>
-                    <input type="number" id="threshold" value="10" min="0" max="64">
-                    <small style="color: #666; margin-top: 4px; display: block;">Lower = stricter matching. 10 is recommended.</small>
+                    <label for="threshold">🎯 Similarity Threshold</label>
+                    <div class="range-container">
+                        <input type="range" id="threshold" min="0" max="64" value="10" oninput="updateThresholdDisplay()">
+                        <span class="range-value" id="thresholdValue">10</span>
+                    </div>
+                    <small>Lower = stricter matching (0-64). Recommended: 5-15</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="autoSelectStrategy">🎯 Auto-Select Strategy</label>
+                    <select id="autoSelectStrategy">
+                        <option value="quality">Keep Highest Quality</option>
+                        <option value="largest">Keep Largest File</option>
+                        <option value="smallest">Keep Smallest File</option>
+                        <option value="newest">Keep Newest File</option>
+                        <option value="oldest">Keep Oldest File</option>
+                    </select>
+                    <small>How to automatically select which image to keep</small>
                 </div>
             </div>
             
@@ -975,30 +1195,165 @@
                 <label>Detection Mode</label>
                 <div class="checkbox-group">
                     <label>
-                        <input type="checkbox" id="exactOnly">
-                        Exact matches only (fastest)
+                        <input type="checkbox" id="exactOnly" onchange="toggleDetectionMode('exact')">
+                        Exact matches only
                     </label>
                     <label>
-                        <input type="checkbox" id="perceptualOnly">
+                        <input type="checkbox" id="perceptualOnly" onchange="toggleDetectionMode('perceptual')">
                         Perceptual matches only
                     </label>
                 </div>
             </div>
             
-            <button class="btn btn-primary" id="scanBtn" onclick="startScan()">
-                &#128640; Start Scan
-            </button>
-            
-            <div class="progress-container" id="progressContainer">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
+            <!-- Advanced Options -->
+            <div class="advanced-options">
+                <div class="advanced-toggle" onclick="toggleAdvancedOptions()">
+                    <span class="arrow">▶</span>
+                    <span>Advanced Options</span>
                 </div>
-                <div class="progress-text" id="progressText">Initializing...</div>
+                
+                <div class="advanced-content" id="advancedContent">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="workers">⚡ Worker Threads</label>
+                            <div class="range-container">
+                                <input type="range" id="workers" min="1" max="16" value="4" oninput="updateWorkersDisplay()">
+                                <span class="range-value" id="workersValue">4</span>
+                            </div>
+                            <small>More workers = faster analysis, more CPU usage</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>🔧 Performance Options</label>
+                            <div class="checkbox-group" style="flex-direction: column; gap: 10px;">
+                                <label>
+                                    <input type="checkbox" id="useCache" checked>
+                                    Use cache (faster re-scans)
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="recursive" checked>
+                                    Scan subdirectories
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>🚀 LSH Acceleration (Large Collections)</label>
+                        <div class="checkbox-group">
+                            <label>
+                                <input type="radio" name="lshMode" value="auto" checked>
+                                Auto (enable for 5,000+ images)
+                            </label>
+                            <label>
+                                <input type="radio" name="lshMode" value="on">
+                                Force On
+                            </label>
+                            <label>
+                                <input type="radio" name="lshMode" value="off">
+                                Force Off
+                            </label>
+                        </div>
+                        <small>LSH provides ~100-1000x speedup for large perceptual matching</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="trashDirPreset">🗑️ Trash Directory (preset)</label>
+                        <input type="text" id="trashDirPreset" placeholder="Leave empty to set when deleting">
+                        <small>Where duplicates will be moved to (optional)</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="btn-group" style="margin-top: 20px;">
+                <button class="btn btn-primary" id="scanBtn" onclick="startScan()">
+                    🚀 Start Scan
+                </button>
+            </div>
+            
+            <!-- Progress Section -->
+            <div class="progress-section" id="progressSection">
+                <!-- Stage Indicators -->
+                <div class="stage-indicators">
+                    <div class="stage-indicator" id="stageScanning">
+                        <div class="stage-dot">📁</div>
+                        <div class="stage-label">Scanning</div>
+                    </div>
+                    <div class="stage-indicator" id="stageAnalyzing">
+                        <div class="stage-dot">🔬</div>
+                        <div class="stage-label">Analyzing</div>
+                    </div>
+                    <div class="stage-indicator" id="stageExact">
+                        <div class="stage-dot">🔗</div>
+                        <div class="stage-label">Exact Match</div>
+                    </div>
+                    <div class="stage-indicator" id="stagePerceptual">
+                        <div class="stage-dot">👁️</div>
+                        <div class="stage-label">Perceptual</div>
+                    </div>
+                    <div class="stage-indicator" id="stageComplete">
+                        <div class="stage-dot">✅</div>
+                        <div class="stage-label">Complete</div>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="progress-container">
+                    <div class="progress-header">
+                        <span class="progress-title" id="progressTitle">Initializing...</span>
+                        <span class="progress-percentage" id="progressPercentage">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill animated" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Preparing scan...</div>
+                </div>
+                
+                <!-- Live Stats -->
+                <div class="live-stats" id="liveStats">
+                    <div class="live-stat">
+                        <div class="live-stat-value" id="liveTotalFiles">0</div>
+                        <div class="live-stat-label">Total Files</div>
+                    </div>
+                    <div class="live-stat">
+                        <div class="live-stat-value" id="liveAnalyzed">0</div>
+                        <div class="live-stat-label">Analyzed</div>
+                    </div>
+                    <div class="live-stat">
+                        <div class="live-stat-value" id="liveRate">0/s</div>
+                        <div class="live-stat-label">Speed</div>
+                    </div>
+                    <div class="live-stat">
+                        <div class="live-stat-value" id="liveEta">--</div>
+                        <div class="live-stat-label">ETA</div>
+                    </div>
+                    <div class="live-stat">
+                        <div class="live-stat-value cache" id="liveCacheHits">0</div>
+                        <div class="live-stat-label">Cache Hits</div>
+                    </div>
+                    <div class="live-stat">
+                        <div class="live-stat-value" id="liveElapsed">0s</div>
+                        <div class="live-stat-label">Elapsed</div>
+                    </div>
+                </div>
+                
+                <!-- Scan Controls -->
+                <div class="scan-controls">
+                    <button class="btn btn-warning btn-sm" id="pauseBtn" onclick="pauseScan()" style="display: none;">
+                        ⏸️ Pause
+                    </button>
+                    <button class="btn btn-success btn-sm" id="resumeBtn" onclick="resumeScan()" style="display: none;">
+                        ▶️ Resume
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="cancelBtn" onclick="cancelScan()">
+                        ✖️ Cancel Scan
+                    </button>
+                </div>
             </div>
         </div>
         
         <!-- Stats Bar -->
-        <div class="stats-bar" id="statsBar" style="display: none;">
+        <div class="stats-bar" id="statsBar">
             <div class="stat-item">
                 <div class="stat-value" id="statGroups">0</div>
                 <div class="stat-label">Duplicate Groups</div>
@@ -1020,18 +1375,18 @@
                 <div class="stat-label">Failed to Analyze</div>
             </div>
             <div class="stat-item" style="margin-left: auto;">
-                <button class="btn btn-secondary btn-sm" onclick="newScan()">&#128260; New Scan</button>
+                <button class="btn btn-secondary btn-sm" onclick="newScan()">🔄 New Scan</button>
             </div>
         </div>
         
-        <!-- Cache Info Banner (shown after scan with cache hits) -->
-        <div class="cache-banner" id="cacheBanner" style="display: none;">
-            <span id="cacheInfo">&#9889; Cache: Loading...</span>
+        <!-- Cache Banner -->
+        <div class="cache-banner" id="cacheBanner">
+            <span id="cacheInfo">⚡ Cache: Loading...</span>
             <button class="btn btn-sm" onclick="showCacheModal()" style="margin-left: 10px; padding: 4px 12px; background: #333;">Manage Cache</button>
         </div>
         
         <!-- Filter Bar -->
-        <div class="filter-bar" id="filterBar" style="display: none;">
+        <div class="filter-bar" id="filterBar">
             <select id="filterType" onchange="applyFilters()">
                 <option value="all">All Groups</option>
                 <option value="exact">Exact Matches Only</option>
@@ -1043,10 +1398,22 @@
                 <option value="id">Sort by Group ID</option>
             </select>
             <input type="text" id="searchFilter" placeholder="Search by filename..." oninput="applyFilters()">
+            
+            <div class="strategy-selector">
+                <label for="strategySelect">Auto-select:</label>
+                <select id="strategySelect" onchange="applyStrategy()">
+                    <option value="quality">Highest Quality</option>
+                    <option value="largest">Largest File</option>
+                    <option value="smallest">Smallest File</option>
+                    <option value="newest">Newest File</option>
+                    <option value="oldest">Oldest File</option>
+                </select>
+            </div>
+            
             <div class="pagination">
-                <button onclick="prevPage()" id="prevBtn">&larr; Prev</button>
+                <button onclick="prevPage()" id="prevBtn">← Prev</button>
                 <span id="pageInfo">Page 1 of 1</span>
-                <button onclick="nextPage()" id="nextBtn">Next &rarr;</button>
+                <button onclick="nextPage()" id="nextBtn">Next →</button>
             </div>
         </div>
         
@@ -1057,9 +1424,9 @@
         <div class="error-section" id="errorSection">
             <div class="error-section-header" onclick="toggleErrorSection()">
                 <div class="error-section-title">
-                    &#9888; <span id="errorSectionCount">0</span> Images Could Not Be Analyzed
+                    ⚠️ <span id="errorSectionCount">0</span> Images Could Not Be Analyzed
                 </div>
-                <div class="error-section-toggle">&#9660;</div>
+                <div class="error-section-toggle">▼</div>
             </div>
             <div class="error-section-content">
                 <p style="color: #888; margin-bottom: 15px;">
@@ -1070,15 +1437,15 @@
         </div>
         
         <!-- Action Bar -->
-        <div class="action-bar" id="actionBar" style="display: none;">
+        <div class="action-bar" id="actionBar">
             <div class="action-summary">
                 <strong id="actionSummary">0 files selected for removal</strong>
                 <span id="actionSavings" style="color: #888; margin-left: 10px;"></span>
             </div>
             <div class="action-buttons">
                 <button class="btn btn-secondary" onclick="resetSelections()">Reset All</button>
-                <button class="btn btn-secondary" onclick="exportSelections()">&#128203; Export List</button>
-                <button class="btn btn-danger" onclick="showDeleteModal()">&#128465; Move to Trash</button>
+                <button class="btn btn-secondary" onclick="exportSelections()">📋 Export List</button>
+                <button class="btn btn-danger" onclick="showDeleteModal()">🗑️ Move to Trash</button>
             </div>
         </div>
     </div>
@@ -1092,7 +1459,7 @@
     <!-- Delete Confirmation Modal -->
     <div class="modal-overlay" id="deleteModal">
         <div class="modal">
-            <h2>&#9888; Confirm Deletion</h2>
+            <h2>⚠️ Confirm Deletion</h2>
             <p id="deleteModalText">Are you sure you want to move X files to the trash folder?</p>
             <div class="form-group">
                 <label for="trashDir">Trash Directory</label>
@@ -1108,7 +1475,7 @@
     <!-- Cache Management Modal -->
     <div class="modal-overlay" id="cacheModal">
         <div class="modal">
-            <h2>&#128451; Cache Management</h2>
+            <h2>📦 Cache Management</h2>
             <p style="color: #888; margin-bottom: 20px;">
                 The cache stores analysis results to speed up re-scans of the same directories.
             </p>
@@ -1127,8 +1494,8 @@
                 </div>
             </div>
             <div class="modal-buttons" style="flex-wrap: wrap; gap: 10px;">
-                <button class="btn btn-secondary" onclick="cleanupCache()">&#128465; Cleanup Old Entries</button>
-                <button class="btn btn-danger" onclick="clearCache()">&#128163; Clear All Cache</button>
+                <button class="btn btn-secondary" onclick="cleanupCache()">🗑️ Cleanup Old Entries</button>
+                <button class="btn btn-danger" onclick="clearCache()">💥 Clear All Cache</button>
                 <button class="btn btn-secondary" onclick="hideCacheModal()">Close</button>
             </div>
         </div>
@@ -1136,18 +1503,10 @@
     
     <!-- Lightbox -->
     <div class="lightbox" id="lightbox">
-        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
-        <button class="lightbox-nav prev" onclick="lightboxPrev(event)">&lsaquo;</button>
+        <button class="lightbox-close" onclick="closeLightbox()">×</button>
+        <button class="lightbox-nav prev" onclick="lightboxPrev(event)">‹</button>
         <img id="lightboxImg" src="" alt="">
-        <button class="lightbox-nav next" onclick="lightboxNext(event)">&rsaquo;</button>
-    </div>
-    
-    <!-- Keyboard Help -->
-    <div class="keyboard-help" id="keyboardHelp">
-        <kbd>&uarr;</kbd><kbd>&darr;</kbd> Navigate groups &nbsp;
-        <kbd>&larr;</kbd><kbd>&rarr;</kbd> Select image &nbsp;
-        <kbd>Space</kbd> Toggle keep &nbsp;
-        <kbd>Z</kbd> Undo
+        <button class="lightbox-nav next" onclick="lightboxNext(event)">›</button>
     </div>
     
     <script>
@@ -1163,14 +1522,13 @@
         let errorImages = [];
         let currentPage = 1;
         const PAGE_SIZE = 10;
-        let focusedGroupIndex = -1;
-        let focusedImageIndex = -1;
         let lightboxImages = [];
         let lightboxIndex = 0;
         let lastPollTime = Date.now();
         let connectionLost = false;
         let scanDirectory = '';
-        let scanThreshold = 10;
+        let isScanning = false;
+        let isPaused = false;
         
         // =============================================================
         // Initialization
@@ -1179,10 +1537,11 @@
             checkForRecovery();
             loadDirectoryHistory();
             startConnectionMonitor();
+            updateThresholdDisplay();
+            updateWorkersDisplay();
         });
         
         function checkForRecovery() {
-            // Always load cache stats on page load
             loadCacheStats();
             
             fetch('/api/status')
@@ -1196,18 +1555,19 @@
                         document.getElementById('recoveryBanner').classList.add('active');
                         document.getElementById('recoveryInfo').textContent = info;
                         
-                        // Also check if perceptual was auto-disabled
                         if (data.auto_disabled_perceptual) {
                             showPerceptualWarning(data.directory);
                         }
+                    } else if (['scanning', 'analyzing', 'comparing'].includes(data.status)) {
+                        // Resume tracking an in-progress scan
+                        isScanning = true;
+                        showProgressSection();
+                        startProgressPolling();
                     }
                 });
         }
         
         function showPerceptualWarning(directory) {
-            const threshold = document.getElementById('threshold').value || 10;
-            document.getElementById('cliCommand').textContent = 
-                `python -m dupefinder cli "${directory}" --threshold ${threshold}`;
             document.getElementById('warningBanner').classList.add('active');
         }
         
@@ -1235,6 +1595,34 @@
         }
         
         // =============================================================
+        // UI Helpers
+        // =============================================================
+        function updateThresholdDisplay() {
+            const val = document.getElementById('threshold').value;
+            document.getElementById('thresholdValue').textContent = val;
+        }
+        
+        function updateWorkersDisplay() {
+            const val = document.getElementById('workers').value;
+            document.getElementById('workersValue').textContent = val;
+        }
+        
+        function toggleAdvancedOptions() {
+            const toggle = document.querySelector('.advanced-toggle');
+            const content = document.getElementById('advancedContent');
+            toggle.classList.toggle('expanded');
+            content.classList.toggle('active');
+        }
+        
+        function toggleDetectionMode(mode) {
+            if (mode === 'exact' && document.getElementById('exactOnly').checked) {
+                document.getElementById('perceptualOnly').checked = false;
+            } else if (mode === 'perceptual' && document.getElementById('perceptualOnly').checked) {
+                document.getElementById('exactOnly').checked = false;
+            }
+        }
+        
+        // =============================================================
         // Connection Monitoring
         // =============================================================
         function startConnectionMonitor() {
@@ -1245,10 +1633,6 @@
                             if (connectionLost) {
                                 connectionLost = false;
                                 updateConnectionStatus(true);
-                                // Reload state if we were in the middle of something
-                                if (scanInterval) {
-                                    // Continue polling
-                                }
                             }
                             lastPollTime = Date.now();
                         }
@@ -1271,14 +1655,6 @@
                 text.textContent = 'Disconnected - Retrying...';
             }
         }
-        
-        // Handle page visibility (tab sleeping)
-        document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && scanInterval) {
-                // Page became visible again, check status immediately
-                checkProgress();
-            }
-        });
         
         // =============================================================
         // Directory History/Autocomplete
@@ -1310,7 +1686,6 @@
             document.getElementById('historyList').classList.remove('active');
         }
         
-        // Hide autocomplete when clicking outside
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.form-group')) {
                 document.getElementById('historyList').classList.remove('active');
@@ -1330,28 +1705,81 @@
             const threshold = parseInt(document.getElementById('threshold').value) || 10;
             const exactOnly = document.getElementById('exactOnly').checked;
             const perceptualOnly = document.getElementById('perceptualOnly').checked;
+            const recursive = document.getElementById('recursive').checked;
+            const useCache = document.getElementById('useCache').checked;
+            const workers = parseInt(document.getElementById('workers').value) || 4;
+            const autoSelectStrategy = document.getElementById('autoSelectStrategy').value;
             
-            // Store for CLI command display
+            // Get LSH mode
+            let useLsh = null;
+            const lshMode = document.querySelector('input[name="lshMode"]:checked').value;
+            if (lshMode === 'on') useLsh = true;
+            else if (lshMode === 'off') useLsh = false;
+            
             scanDirectory = directory;
-            scanThreshold = threshold;
-            
-            // Hide any previous warning
             hidePerceptualWarning();
             
-            document.getElementById('scanBtn').disabled = true;
-            document.getElementById('progressContainer').classList.add('active');
-            document.getElementById('groupsContainer').classList.remove('active');
-            document.getElementById('statsBar').style.display = 'none';
-            document.getElementById('actionBar').style.display = 'none';
-            document.getElementById('filterBar').style.display = 'none';
-            document.getElementById('errorSection').classList.remove('active');
-            
+            // Send scan request
             fetch('/api/scan', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({directory, threshold, exactOnly, perceptualOnly})
+                body: JSON.stringify({
+                    directory,
+                    threshold,
+                    exactOnly,
+                    perceptualOnly,
+                    recursive,
+                    useCache,
+                    useLsh,
+                    workers,
+                    autoSelectStrategy,
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                isScanning = true;
+                isPaused = false;
+                showProgressSection();
+                startProgressPolling();
+            })
+            .catch(err => {
+                alert('Failed to start scan: ' + err);
+            });
+        }
+        
+        function showProgressSection() {
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('progressSection').classList.add('active');
+            document.getElementById('groupsContainer').classList.remove('active');
+            document.getElementById('statsBar').classList.remove('active');
+            document.getElementById('actionBar').classList.remove('active');
+            document.getElementById('filterBar').classList.remove('active');
+            document.getElementById('errorSection').classList.remove('active');
+            
+            // Reset stage indicators
+            document.querySelectorAll('.stage-indicator').forEach(el => {
+                el.classList.remove('active', 'completed', 'error');
             });
             
+            // Show cancel button
+            document.getElementById('cancelBtn').style.display = 'inline-block';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('resumeBtn').style.display = 'none';
+        }
+        
+        function hideProgressSection() {
+            document.getElementById('scanBtn').disabled = false;
+            document.getElementById('progressSection').classList.remove('active');
+            document.getElementById('progressFill').classList.remove('animated');
+        }
+        
+        function startProgressPolling() {
+            if (scanInterval) clearInterval(scanInterval);
             scanInterval = setInterval(checkProgress, 500);
         }
         
@@ -1359,27 +1787,129 @@
             fetch('/api/status')
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('progressFill').style.width = data.progress + '%';
-                    document.getElementById('progressText').textContent = data.message;
+                    updateProgressUI(data);
                     
-                    if (data.status === 'complete' || data.status === 'error') {
+                    if (data.status === 'complete' || data.status === 'error' || data.status === 'cancelled') {
                         clearInterval(scanInterval);
                         scanInterval = null;
-                        document.getElementById('scanBtn').disabled = false;
+                        isScanning = false;
                         
                         if (data.status === 'complete') {
-                            // Check if perceptual was auto-disabled
                             if (data.auto_disabled_perceptual) {
                                 showPerceptualWarning(scanDirectory);
                             }
                             loadResults();
+                        } else if (data.status === 'cancelled') {
+                            hideProgressSection();
+                            alert('Scan cancelled');
                         } else {
+                            hideProgressSection();
                             alert('Scan error: ' + data.message);
                         }
                     }
+                    
+                    // Handle pause state
+                    isPaused = data.paused;
+                    if (isPaused) {
+                        document.getElementById('pauseBtn').style.display = 'none';
+                        document.getElementById('resumeBtn').style.display = 'inline-block';
+                    } else {
+                        document.getElementById('pauseBtn').style.display = 'inline-block';
+                        document.getElementById('resumeBtn').style.display = 'none';
+                    }
                 })
-                .catch(() => {
-                    // Connection issue - will retry via connection monitor
+                .catch(() => {});
+        }
+        
+        function updateProgressUI(data) {
+            // Update progress bar
+            document.getElementById('progressFill').style.width = data.progress + '%';
+            document.getElementById('progressPercentage').textContent = data.progress + '%';
+            document.getElementById('progressText').textContent = data.message;
+            
+            // Update stage title
+            const stageNames = {
+                'idle': 'Starting...',
+                'scanning': 'Scanning Files',
+                'analyzing': 'Analyzing Images',
+                'exact_matching': 'Finding Exact Duplicates',
+                'perceptual_matching': 'Finding Similar Images',
+                'complete': 'Complete'
+            };
+            document.getElementById('progressTitle').textContent = stageNames[data.stage] || data.stage;
+            
+            // Update stage indicators
+            updateStageIndicators(data.stage);
+            
+            // Update live stats
+            const details = data.progress_details || {};
+            document.getElementById('liveTotalFiles').textContent = formatNumber(data.total_files || 0);
+            document.getElementById('liveAnalyzed').textContent = formatNumber(data.analyzed || 0);
+            document.getElementById('liveRate').textContent = (details.rate || 0).toFixed(1) + '/s';
+            document.getElementById('liveEta').textContent = formatEta(details.eta_seconds);
+            document.getElementById('liveCacheHits').textContent = formatNumber(details.cache_hits || 0);
+            document.getElementById('liveElapsed').textContent = formatElapsed(details.elapsed_seconds || 0);
+        }
+        
+        function updateStageIndicators(stage) {
+            const stages = ['scanning', 'analyzing', 'exact_matching', 'perceptual_matching', 'complete'];
+            const stageMap = {
+                'scanning': 'stageScanning',
+                'analyzing': 'stageAnalyzing',
+                'exact_matching': 'stageExact',
+                'perceptual_matching': 'stagePerceptual',
+                'complete': 'stageComplete'
+            };
+            
+            const currentIndex = stages.indexOf(stage);
+            
+            for (let i = 0; i < stages.length; i++) {
+                const el = document.getElementById(stageMap[stages[i]]);
+                if (!el) continue;
+                
+                el.classList.remove('active', 'completed');
+                
+                if (i < currentIndex) {
+                    el.classList.add('completed');
+                } else if (i === currentIndex) {
+                    el.classList.add('active');
+                }
+            }
+        }
+        
+        function cancelScan() {
+            if (confirm('Are you sure you want to cancel the scan?')) {
+                fetch('/api/cancel', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'cancel_requested') {
+                            document.getElementById('progressText').textContent = 'Cancelling...';
+                        }
+                    });
+            }
+        }
+        
+        function pauseScan() {
+            fetch('/api/pause', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'paused') {
+                        document.getElementById('pauseBtn').style.display = 'none';
+                        document.getElementById('resumeBtn').style.display = 'inline-block';
+                        document.getElementById('progressFill').classList.remove('animated');
+                    }
+                });
+        }
+        
+        function resumeScan() {
+            fetch('/api/resume', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'resumed') {
+                        document.getElementById('pauseBtn').style.display = 'inline-block';
+                        document.getElementById('resumeBtn').style.display = 'none';
+                        document.getElementById('progressFill').classList.add('animated');
+                    }
                 });
         }
         
@@ -1391,7 +1921,6 @@
                     selections = data.selections || {};
                     errorImages = data.error_images || [];
                     
-                    // If no selections yet, auto-select: keep best, delete rest
                     if (Object.keys(selections).length === 0) {
                         groups.forEach(g => {
                             g.images.forEach((img, idx) => {
@@ -1400,10 +1929,14 @@
                         });
                     }
                     
-                    // Update directory history
                     if (data.directory && !directoryHistory.includes(data.directory)) {
                         directoryHistory.unshift(data.directory);
                         directoryHistory = directoryHistory.slice(0, 10);
+                    }
+                    
+                    // Sync strategy dropdown
+                    if (data.settings && data.settings.auto_select_strategy) {
+                        document.getElementById('strategySelect').value = data.settings.auto_select_strategy;
                     }
                     
                     currentPage = 1;
@@ -1411,16 +1944,15 @@
                     updateStats();
                     renderErrorImages();
                     
-                    document.getElementById('progressContainer').classList.remove('active');
+                    hideProgressSection();
                     document.getElementById('groupsContainer').classList.add('active');
-                    document.getElementById('statsBar').style.display = 'flex';
-                    document.getElementById('filterBar').style.display = 'flex';
+                    document.getElementById('statsBar').classList.add('active');
+                    document.getElementById('filterBar').classList.add('active');
                     
                     if (groups.length > 0) {
-                        document.getElementById('actionBar').style.display = 'flex';
+                        document.getElementById('actionBar').classList.add('active');
                     }
                     
-                    // Load cache stats
                     loadCacheStats();
                 });
         }
@@ -1433,10 +1965,10 @@
                     errorImages = [];
                     hidePerceptualWarning();
                     document.getElementById('groupsContainer').classList.remove('active');
-                    document.getElementById('statsBar').style.display = 'none';
-                    document.getElementById('actionBar').style.display = 'none';
-                    document.getElementById('filterBar').style.display = 'none';
-                    document.getElementById('cacheBanner').style.display = 'none';
+                    document.getElementById('statsBar').classList.remove('active');
+                    document.getElementById('actionBar').classList.remove('active');
+                    document.getElementById('filterBar').classList.remove('active');
+                    document.getElementById('cacheBanner').classList.remove('active');
                     document.getElementById('errorSection').classList.remove('active');
                 });
             }
@@ -1491,7 +2023,6 @@
                 return true;
             });
             
-            // Sort
             filteredGroups.sort((a, b) => {
                 if (sortBy === 'savings') return b.potential_savings - a.potential_savings;
                 if (sortBy === 'count') return b.image_count - a.image_count;
@@ -1501,6 +2032,25 @@
             currentPage = 1;
             renderGroups();
             updatePagination();
+        }
+        
+        function applyStrategy() {
+            const strategy = document.getElementById('strategySelect').value;
+            
+            fetch('/api/apply_strategy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ strategy })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.selections) {
+                    selections = data.selections;
+                    renderGroups();
+                    updateStats();
+                    showUndoToast('Selection strategy applied: ' + strategy);
+                }
+            });
         }
         
         function updatePagination() {
@@ -1538,7 +2088,7 @@
             if (filteredGroups.length === 0) {
                 container.innerHTML = `
                     <div class="no-results">
-                        <h2>&#10024; No Duplicates Found!</h2>
+                        <h2>✨ No Duplicates Found!</h2>
                         <p>Your image collection is clean, or no matches for current filters.</p>
                     </div>
                 `;
@@ -1549,7 +2099,7 @@
             const pageGroups = filteredGroups.slice(start, start + PAGE_SIZE);
             
             container.innerHTML = pageGroups.map((group, groupIdx) => `
-                <div class="group-card" data-group-id="${group.id}" data-group-idx="${start + groupIdx}">
+                <div class="group-card" data-group-id="${group.id}">
                     <div class="group-header">
                         <div class="group-title">
                             Group #${group.id} 
@@ -1564,18 +2114,17 @@
                         ${group.images.map((img, idx) => `
                             <div class="image-card ${selections[img.path] === 'keep' ? 'selected' : 'to-delete'}" 
                                  data-path="${escapeHtml(img.path)}"
-                                 data-img-idx="${idx}"
                                  onclick="toggleSelection('${escapeJs(img.path)}', ${group.id})">
                                 <div class="image-wrapper">
                                     <img class="image-preview" 
                                          src="/api/image?path=${encodeURIComponent(img.path)}" 
                                          alt="${escapeHtml(img.filename)}"
                                          loading="lazy"
-                                         onerror="this.classList.add('error'); this.alt='Failed to load'"
+                                         onerror="this.alt='Failed to load'"
                                          ondblclick="event.stopPropagation(); openLightbox(${group.id}, ${idx})">
                                     ${selections[img.path] === 'keep' 
-                                        ? '<div class="keep-badge">&#10004; KEEP</div>' 
-                                        : '<div class="delete-badge">&#10007; DELETE</div>'}
+                                        ? '<div class="keep-badge">✔ KEEP</div>' 
+                                        : '<div class="delete-badge">✖ DELETE</div>'}
                                 </div>
                                 <div class="image-info">
                                     <div class="image-filename">${escapeHtml(img.filename)}</div>
@@ -1622,21 +2171,17 @@
             const group = groups.find(g => g.id === groupId);
             if (!group) return;
             
-            // Save for undo
             const prevSelections = {...selections};
             undoStack.push({ type: 'selection', data: prevSelections });
             if (undoStack.length > 50) undoStack.shift();
             
-            // If clicking on a 'delete' image, make it 'keep' and others 'delete'
             if (selections[path] === 'delete') {
                 group.images.forEach(img => {
                     selections[img.path] = img.path === path ? 'keep' : 'delete';
                 });
             }
             
-            // Save to server
             saveSelections();
-            
             renderGroups();
             updateStats();
             showUndoToast('Selection updated');
@@ -1690,7 +2235,6 @@
             document.getElementById('statSavings').textContent = formatSize(selectedSize);
             document.getElementById('statSelected').textContent = selectedCount;
             
-            // Show error count if there are errors
             if (errorImages.length > 0) {
                 document.getElementById('statErrorsContainer').style.display = 'block';
                 document.getElementById('statErrors').textContent = errorImages.length;
@@ -1741,7 +2285,6 @@
                 lines.push('');
             });
             
-            // Add error images section
             if (errorImages.length > 0) {
                 lines.push('## Failed to Analyze');
                 errorImages.forEach(img => {
@@ -1772,8 +2315,13 @@
             document.getElementById('deleteModalText').textContent = 
                 `Are you sure you want to move ${count} files to the trash folder?`;
             
+            // Use preset trash dir or suggest one
+            const preset = document.getElementById('trashDirPreset').value.trim();
             const scanDir = document.getElementById('directory').value.trim();
-            if (scanDir && !document.getElementById('trashDir').value) {
+            
+            if (preset) {
+                document.getElementById('trashDir').value = preset;
+            } else if (scanDir && !document.getElementById('trashDir').value) {
                 document.getElementById('trashDir').value = scanDir + '_duplicates_trash';
             }
             
@@ -1805,7 +2353,6 @@
                 hideDeleteModal();
                 alert(`Moved ${data.moved} files to trash.\n${data.errors} errors.`);
                 
-                // Remove deleted files from groups
                 groups.forEach(g => {
                     g.images = g.images.filter(img => !filesToDelete.includes(img.path));
                 });
@@ -1817,7 +2364,7 @@
                 updateStats();
                 
                 if (groups.length === 0) {
-                    document.getElementById('actionBar').style.display = 'none';
+                    document.getElementById('actionBar').classList.remove('active');
                 }
             });
         }
@@ -1861,23 +2408,21 @@
         // Keyboard Navigation
         // =============================================================
         document.addEventListener('keydown', e => {
-            // Ignore if typing in input
             if (e.target.tagName === 'INPUT') return;
             
             if (e.key === 'Escape') {
                 closeLightbox();
                 hideDeleteModal();
+                hideCacheModal();
                 return;
             }
             
-            // Lightbox navigation
             if (document.getElementById('lightbox').classList.contains('active')) {
                 if (e.key === 'ArrowLeft') lightboxPrev(e);
                 if (e.key === 'ArrowRight') lightboxNext(e);
                 return;
             }
             
-            // Undo
             if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 undoAction();
@@ -1906,9 +2451,8 @@
                     document.getElementById('cacheModalSize').textContent = `${sizeMb} MB`;
                     document.getElementById('cacheModalPath').textContent = data.db_path || 'Unknown';
                     
-                    // Show cache banner if there are cached entries
                     if (entries > 0) {
-                        document.getElementById('cacheBanner').style.display = 'flex';
+                        document.getElementById('cacheBanner').classList.add('active');
                     }
                 })
                 .catch(() => {
@@ -1935,7 +2479,7 @@
                 .then(() => {
                     alert('Cache cleared successfully.');
                     loadCacheStats();
-                    document.getElementById('cacheBanner').style.display = 'none';
+                    document.getElementById('cacheBanner').classList.remove('active');
                 })
                 .catch(() => alert('Failed to clear cache.'));
         }
@@ -1967,13 +2511,45 @@
             return bytes.toFixed(1) + ' ' + units[i];
         }
         
+        function formatNumber(n) {
+            return n.toLocaleString();
+        }
+        
+        function formatEta(seconds) {
+            if (!seconds || seconds <= 0) return '--';
+            if (seconds < 60) return Math.round(seconds) + 's';
+            if (seconds < 3600) {
+                const m = Math.floor(seconds / 60);
+                const s = Math.round(seconds % 60);
+                return `${m}m ${s}s`;
+            }
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            return `${h}h ${m}m`;
+        }
+        
+        function formatElapsed(seconds) {
+            if (!seconds || seconds <= 0) return '0s';
+            if (seconds < 60) return Math.round(seconds) + 's';
+            if (seconds < 3600) {
+                const m = Math.floor(seconds / 60);
+                const s = Math.round(seconds % 60);
+                return `${m}m ${s}s`;
+            }
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            return `${h}h ${m}m`;
+        }
+        
         function escapeHtml(str) {
+            if (!str) return '';
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
         }
         
         function escapeJs(str) {
+            if (!str) return '';
             return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         }
     </script>

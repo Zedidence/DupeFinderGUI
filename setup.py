@@ -28,7 +28,11 @@ if readme_path.exists():
 
 setup(
     name="dupefinder",
+<<<<<<< HEAD
     version=version,
+=======
+    version="2.1.0",  # Bumped for HEIC support
+>>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
     author="Zach Daly",
     description="A comprehensive tool for finding duplicate and visually similar images",
     long_description=long_description,
@@ -44,6 +48,8 @@ setup(
         "Pillow>=9.0.0",
         "imagehash>=4.0.0",
         "flask>=2.0.0",
+        "numpy>=1.20.0",
+        "pillow-heif>=0.10.0",  # HEIC/HEIF format support
     ],
     extras_require={
         "dev": [
@@ -76,5 +82,5 @@ setup(
         "Topic :: Multimedia :: Graphics",
         "Topic :: Utilities",
     ],
-    keywords="duplicate image finder photo dedup hash perceptual",
+    keywords="duplicate image finder photo dedup hash perceptual heic",
 )
