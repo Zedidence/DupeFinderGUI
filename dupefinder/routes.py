@@ -250,26 +250,40 @@ def run_scan(
         
         def analysis_progress_callback(current, total):
             nonlocal last_save_time, last_progress_update
-<<<<<<< HEAD
+
+            # Check for cancel
+            if scan_state.cancel_requested:
+                return
+
+            # Handle pause
+            while scan_state.paused and not scan_state.cancel_requested:
+                time.sleep(0.5)
 
             current_time = time.time()
 
-            # Only update state when we need to display or save
-            # Check if 0.5 seconds have passed or if it's the final update
+            # Optimized: Only update when 0.5 seconds have passed or final update
             should_update = (current_time - last_progress_update >= 0.5) or (current == total)
 
             if should_update:
                 scan_state.analyzed = current
-                scan_state.progress = int(current / total * 50)
+                scan_state.progress = int(current / total * 50)  # 0-50% for analysis
+                scan_state.stage_progress = int(current / total * 100)
+
+                elapsed = current_time - analysis_start_time
+
+                # Update progress details
+                scan_state.progress_details['elapsed_seconds'] = current_time - scan_state.progress_details['start_time']
 
                 # Update message every 2 seconds
                 if current_time - last_progress_update >= 2:
-                    elapsed = current_time - analysis_start_time
                     rate = current / elapsed if elapsed > 0 else 0
                     remaining = total - current
 
+                    scan_state.progress_details['rate'] = round(rate, 1)
+
                     if rate > 0:
                         eta_seconds = remaining / rate
+                        scan_state.progress_details['eta_seconds'] = int(eta_seconds)
                         eta_str = format_time_estimate(eta_seconds)
                         scan_state.message = (
                             f'Analyzing images: {format_number(current)}/{format_number(total)} '
@@ -283,54 +297,8 @@ def run_scan(
 
                 # Save state every 5 seconds
                 if current_time - last_save_time > 5:
-                    scan_state.save()
+                    _safe_save_state()
                     last_save_time = current_time
-=======
-            
-            # Check for cancel
-            if scan_state.cancel_requested:
-                return
-            
-            # Handle pause
-            while scan_state.paused and not scan_state.cancel_requested:
-                time.sleep(0.5)
-            
-            scan_state.analyzed = current
-            scan_state.progress = int(current / total * 50)  # 0-50% for analysis
-            scan_state.stage_progress = int(current / total * 100)
-            
-            current_time = time.time()
-            elapsed = current_time - analysis_start_time
-            
-            # Update progress details
-            scan_state.progress_details['elapsed_seconds'] = current_time - scan_state.progress_details['start_time']
-            
-            # Update message every 1 second
-            if current_time - last_progress_update >= 1:
-                rate = current / elapsed if elapsed > 0 else 0
-                remaining = total - current
-                
-                scan_state.progress_details['rate'] = round(rate, 1)
-                
-                if rate > 0:
-                    eta_seconds = remaining / rate
-                    scan_state.progress_details['eta_seconds'] = int(eta_seconds)
-                    eta_str = format_time_estimate(eta_seconds)
-                    scan_state.message = (
-                        f'Analyzing images: {format_number(current)}/{format_number(total)} '
-                        f'({int(rate)}/sec, ~{eta_str} remaining)'
-                    )
-                else:
-                    scan_state.message = (
-                        f'Analyzing images: {format_number(current)}/{format_number(total)}'
-                    )
-                last_progress_update = current_time
-            
-            # Save state every 5 seconds
-            if current_time - last_save_time > 5:
-                _safe_save_state()
-                last_save_time = current_time
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
         
         # Use the cached parallel analyzer
         images, cache_stats = analyze_images_parallel(
@@ -448,61 +416,43 @@ def run_scan(
             
             def comparison_progress_callback(current, total):
                 nonlocal last_progress_update
-<<<<<<< HEAD
+
+                # Check for cancel
+                if scan_state.cancel_requested:
+                    return
+
+                # Handle pause
+                while scan_state.paused and not scan_state.cancel_requested:
+                    time.sleep(0.5)
+
                 current_time = time.time()
 
-                # Only update when 0.5 seconds have passed or final update
+                # Optimized: Only update when 0.5 seconds have passed or final update
                 should_update = (current_time - last_progress_update >= 0.5) or (current == total)
 
                 if should_update:
                     scan_state.progress = 60 + int(current / total * 35)
+                    scan_state.stage_progress = int(current / total * 100)
+                    scan_state.progress_details['comparisons_done'] = current
+                    scan_state.progress_details['elapsed_seconds'] = time.time() - scan_state.progress_details['start_time']
 
                     # Update message every 2 seconds with progress
                     if current_time - last_progress_update >= 2:
                         elapsed = current_time - comparison_start_time
                         rate = current / elapsed if elapsed > 0 else 0
                         remaining = total - current
+
+                        scan_state.progress_details['rate'] = round(rate, 1)
+
                         if rate > 0:
                             eta_seconds = remaining / rate
+                            scan_state.progress_details['eta_seconds'] = int(eta_seconds)
                             eta_str = format_time_estimate(eta_seconds)
                             scan_state.message = (
                                 f'Comparing images: {format_number(current)}/{format_number(total)} '
                                 f'({format_number(int(rate))}/sec, ~{eta_str} remaining)'
                             )
                         last_progress_update = current_time
-=======
-                
-                # Check for cancel
-                if scan_state.cancel_requested:
-                    return
-                
-                # Handle pause
-                while scan_state.paused and not scan_state.cancel_requested:
-                    time.sleep(0.5)
-                
-                scan_state.progress = 60 + int(current / total * 35)
-                scan_state.stage_progress = int(current / total * 100)
-                scan_state.progress_details['comparisons_done'] = current
-                scan_state.progress_details['elapsed_seconds'] = time.time() - scan_state.progress_details['start_time']
-                
-                current_time = time.time()
-                if current_time - last_progress_update >= 1:
-                    elapsed = current_time - comparison_start_time
-                    rate = current / elapsed if elapsed > 0 else 0
-                    remaining = total - current
-                    
-                    scan_state.progress_details['rate'] = round(rate, 1)
-                    
-                    if rate > 0:
-                        eta_seconds = remaining / rate
-                        scan_state.progress_details['eta_seconds'] = int(eta_seconds)
-                        eta_str = format_time_estimate(eta_seconds)
-                        scan_state.message = (
-                            f'Comparing images: {format_number(current)}/{format_number(total)} '
-                            f'({format_number(int(rate))}/sec, ~{eta_str} remaining)'
-                        )
-                    last_progress_update = current_time
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
             
             perceptual_groups = find_perceptual_duplicates(
                 valid_images,
@@ -583,7 +533,6 @@ def index():
 @api.route('/api/scan', methods=['POST'])
 def api_scan():
     """Start a new scan in the background."""
-<<<<<<< HEAD
     data = request.json
     if not data:
         return jsonify({'error': 'Request body required'}), 400
@@ -592,6 +541,13 @@ def api_scan():
     threshold = data.get('threshold', 10)
     exact_only = data.get('exactOnly', False)
     perceptual_only = data.get('perceptualOnly', False)
+
+    # New options
+    recursive = data.get('recursive', True)
+    use_cache = data.get('useCache', True)
+    use_lsh = data.get('useLsh')  # None, True, or False
+    workers = data.get('workers', 4)
+    auto_select_strategy = data.get('autoSelectStrategy', 'quality')
 
     # Validate directory
     if not directory:
@@ -602,6 +558,8 @@ def api_scan():
         return jsonify({'error': f'Directory not found: {directory}'}), 404
     if not os.path.isdir(directory):
         return jsonify({'error': f'Path is not a directory: {directory}'}), 400
+    if not os.access(directory, os.R_OK):
+        return jsonify({'error': f'Cannot read directory (permission denied): {directory}'}), 400
 
     # Validate threshold
     try:
@@ -615,37 +573,9 @@ def api_scan():
     if exact_only and perceptual_only:
         return jsonify({'error': 'Cannot use both exactOnly and perceptualOnly'}), 400
 
-=======
-    data = request.json or {}
-    directory = data.get('directory', '')
-    threshold = data.get('threshold', 10)
-    exact_only = data.get('exactOnly', False)
-    perceptual_only = data.get('perceptualOnly', False)
-    
-    # New options
-    recursive = data.get('recursive', True)
-    use_cache = data.get('useCache', True)
-    use_lsh = data.get('useLsh')  # None, True, or False
-    workers = data.get('workers', 4)
-    auto_select_strategy = data.get('autoSelectStrategy', 'quality')
-    
-    # Validate directory
-    if not directory:
-        return jsonify({'error': 'No directory specified'}), 400
-    
-    if not os.path.exists(directory):
-        return jsonify({'error': f'Directory does not exist: {directory}'}), 400
-    
-    if not os.path.isdir(directory):
-        return jsonify({'error': f'Path is not a directory: {directory}'}), 400
-    
-    if not os.access(directory, os.R_OK):
-        return jsonify({'error': f'Cannot read directory (permission denied): {directory}'}), 400
-    
     # Validate workers
     workers = max(1, min(workers, 16))
-    
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
+
     # Start scan in background thread
     thread = threading.Thread(
         target=run_scan,
@@ -758,10 +688,9 @@ def api_clear():
 
 @api.route('/api/image')
 def api_image():
-<<<<<<< HEAD
     """Serve an image file for preview.
 
-    Security: Only serves images that were found in the most recent scan
+    Security: Only serves images within the scanned directory
     to prevent path traversal attacks.
     """
     path = request.args.get('path', '').strip()
@@ -769,72 +698,43 @@ def api_image():
     if not path:
         return jsonify({'error': 'No path specified'}), 400
 
-    # Normalize path to prevent directory traversal
-    try:
-        normalized_path = os.path.normpath(os.path.abspath(path))
-    except (ValueError, OSError):
-        return jsonify({'error': 'Invalid path'}), 400
-
-    # Verify file exists
-    if not os.path.exists(normalized_path):
-        return jsonify({'error': 'File not found'}), 404
-
-    if not os.path.isfile(normalized_path):
-        return jsonify({'error': 'Path is not a file'}), 400
-
-    # Security check: Verify this path is in our scanned results
-    # This prevents serving arbitrary files from the system
-    if scan_state.groups:
-        valid_paths = set()
-        for group in scan_state.groups:
-            for img in group.images:
-                valid_paths.add(os.path.normpath(os.path.abspath(img.path)))
-
-        if normalized_path not in valid_paths:
-            return jsonify({'error': 'Access denied: path not in scan results'}), 403
-    else:
-        # No scan results available - don't serve any files
-        return jsonify({'error': 'No active scan results'}), 403
-
-    # Serve the file
-    try:
-        return send_file(normalized_path)
-    except Exception as e:
-        return jsonify({'error': f'Error serving file: {str(e)}'}), 500
-=======
-    """Serve an image file for preview."""
-    path = request.args.get('path', '')
-    
-    # Validate path is within scanned directory
+    # Security check: Validate path is within scanned directory
     if scan_state.directory:
         if not _validate_path_in_directory(path, scan_state.directory):
             _logger.warning(f"Blocked access to file outside scan directory: {path}")
             return jsonify({'error': 'Access denied: file outside scan directory'}), 403
-    
-    if os.path.exists(path):
+    else:
+        # No scan results available - don't serve any files
+        return jsonify({'error': 'No active scan results'}), 403
+
+    # Verify file exists
+    if not os.path.exists(path):
+        return jsonify({'error': 'File not found'}), 404
+
+    if not os.path.isfile(path):
+        return jsonify({'error': 'Path is not a file'}), 400
+
+    # Serve the file
+    try:
         return send_file(path)
-    return '', 404
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
+    except Exception as e:
+        _logger.error(f"Error serving file {path}: {e}")
+        return jsonify({'error': f'Error serving file: {str(e)}'}), 500
 
 
 @api.route('/api/delete', methods=['POST'])
 def api_delete():
     """Move selected files to trash directory."""
-<<<<<<< HEAD
     data = request.json
     if not data:
         return jsonify({'error': 'Request body required'}), 400
 
-=======
-    data = request.json or {}
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
     files = data.get('files', [])
     trash_dir = data.get('trashDir', '').strip()
 
     # Validate inputs
     if not trash_dir:
         return jsonify({'error': 'No trash directory specified'}), 400
-<<<<<<< HEAD
     if not os.path.isabs(trash_dir):
         return jsonify({'error': 'Trash directory must be an absolute path'}), 400
     if not isinstance(files, list):
@@ -842,27 +742,20 @@ def api_delete():
     if len(files) == 0:
         return jsonify({'error': 'No files specified'}), 400
 
-    # Create trash dir
-    try:
-        os.makedirs(trash_dir, exist_ok=True)
-    except (OSError, PermissionError) as e:
-        return jsonify({'error': f'Cannot create trash directory: {str(e)}'}), 500
-=======
-    
     # Validate all file paths are within the scanned directory
     if scan_state.directory:
         invalid_paths = []
         for filepath in files:
             if not _validate_path_in_directory(filepath, scan_state.directory):
                 invalid_paths.append(filepath)
-        
+
         if invalid_paths:
             _logger.warning(f"Blocked deletion of files outside scan directory: {invalid_paths}")
             return jsonify({
                 'error': 'Security error: some files are outside the scanned directory',
                 'invalid_paths': invalid_paths
             }), 403
-    
+
     # Create trash directory
     try:
         os.makedirs(trash_dir, exist_ok=True)
@@ -870,7 +763,6 @@ def api_delete():
         return jsonify({'error': f'Cannot create trash directory (permission denied): {trash_dir}'}), 400
     except OSError as e:
         return jsonify({'error': f'Cannot create trash directory: {e}'}), 400
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
     
     moved = 0
     errors = 0

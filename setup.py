@@ -28,11 +28,7 @@ if readme_path.exists():
 
 setup(
     name="dupefinder",
-<<<<<<< HEAD
-    version=version,
-=======
-    version="2.1.0",  # Bumped for HEIC support
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
+    version=version,  # Dynamically read from __init__.py (currently 2.1.0)
     author="Zach Daly",
     description="A comprehensive tool for finding duplicate and visually similar images",
     long_description=long_description,

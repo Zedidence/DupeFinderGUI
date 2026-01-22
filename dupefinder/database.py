@@ -12,11 +12,8 @@ The cache uses file path + mtime + size as a cache key to detect changes.
 import sqlite3
 import os
 import time
-<<<<<<< HEAD
 import logging
-=======
 import threading
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Generator
@@ -522,24 +519,11 @@ class ImageCache:
             with self._conn(exclusive=True) as conn:
                 conn.execute("DELETE FROM images")
                 conn.execute("DELETE FROM scan_history")
-<<<<<<< HEAD
-                conn.execute("VACUUM")
+            # VACUUM outside transaction
+            self.vacuum()
         except Exception as e:
             logger.warning(f"Failed to clear cache: {e}")
 
-    def vacuum(self):
-        """Compact the database file."""
-        try:
-            with self._conn() as conn:
-                conn.execute("VACUUM")
-        except Exception as e:
-            logger.debug(f"Failed to vacuum database: {e}")
-=======
-            # VACUUM outside transaction
-            self.vacuum()
-        except Exception:
-            pass
-    
     def vacuum(self):
         """Compact the database file."""
         try:
@@ -547,9 +531,8 @@ class ImageCache:
             conn = sqlite3.connect(self.db_path, timeout=30.0)
             conn.execute("VACUUM")
             conn.close()
-        except Exception:
-            pass
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
+        except Exception as e:
+            logger.debug(f"Failed to vacuum database: {e}")
 
 
 # Global cache instance

@@ -494,28 +494,7 @@ Platform Notes:
         action='store_true',
         help='Only find perceptual duplicates (skip exact matching)'
     )
-<<<<<<< HEAD
 
-    parser.add_argument(
-        '--lsh',
-        action='store_true',
-        help='Force LSH acceleration on (overrides auto-selection)'
-    )
-
-    parser.add_argument(
-        '--no-lsh',
-        action='store_true',
-        help='Force brute-force comparison, disable LSH (overrides auto-selection)'
-    )
-
-    parser.add_argument(
-        '--no-cache',
-        action='store_true',
-        help='Disable SQLite caching (analyze all images fresh)'
-    )
-
-=======
-    
     # FIXED #11: Add LSH control arguments
     lsh_group = parser.add_mutually_exclusive_group()
     lsh_group.add_argument(
@@ -530,8 +509,13 @@ Platform Notes:
         dest='no_lsh',
         help='Force brute-force comparison (disable LSH auto-selection)'
     )
-    
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
+
+    parser.add_argument(
+        '--no-cache',
+        action='store_true',
+        help='Disable SQLite caching (analyze all images fresh)'
+    )
+
     parser.add_argument(
         '-a', '--action',
         choices=['report', 'delete', 'move', 'hardlink', 'symlink'],
@@ -624,33 +608,7 @@ Platform Notes:
     if args.action == 'move' and not args.trash_dir:
         logger.error("--trash-dir required for 'move' action")
         sys.exit(1)
-<<<<<<< HEAD
 
-    if args.trash_dir and not args.trash_dir.exists():
-        args.trash_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Created trash directory: {args.trash_dir}")
-
-    # Validate mutually exclusive flags
-    if args.lsh and args.no_lsh:
-        logger.error("Cannot use both --lsh and --no-lsh")
-        sys.exit(1)
-
-    # Determine LSH usage
-    use_lsh = None  # Auto-select by default
-    if args.lsh:
-        use_lsh = True
-        logger.info("LSH acceleration forced on")
-    elif args.no_lsh:
-        use_lsh = False
-        logger.info("LSH disabled (brute-force mode)")
-
-    # Determine cache usage
-    use_cache = not args.no_cache
-    if args.no_cache:
-        logger.info("Cache disabled - analyzing all images fresh")
-
-=======
-    
     # FIXED #2: Better error handling for trash directory creation
     if args.trash_dir:
         try:
@@ -663,7 +621,7 @@ Platform Notes:
         except OSError as e:
             logger.error(f"Cannot create trash directory: {e}")
             sys.exit(1)
-    
+
     # FIXED #11: Pre-check platform support for hardlink/symlink
     if args.action == 'hardlink' and not dry_run:
         if platform.system() == 'Windows':
@@ -678,17 +636,22 @@ Platform Notes:
                 logger.error(f"Symlinks not supported: {reason}")
                 logger.info("Tip: Run as Administrator or enable Developer Mode in Windows Settings")
                 sys.exit(1)
-    
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
+
     show_progress = not args.no_progress
+
+    # Determine cache usage
     use_cache = not args.no_cache
-    
+    if args.no_cache:
+        logger.info("Cache disabled - analyzing all images fresh")
+
     # Determine LSH mode
-    use_lsh = None  # Auto
+    use_lsh = None  # Auto-select by default
     if args.force_lsh:
         use_lsh = True
+        logger.info("LSH acceleration forced on")
     elif args.no_lsh:
         use_lsh = False
+        logger.info("LSH disabled (brute-force mode)")
     
     # Find images
     logger.info(f"Scanning {args.directory} for images...")
@@ -707,35 +670,21 @@ Platform Notes:
     # Analyze images
     logger.info("Analyzing images (this may take a while)...")
     images, cache_stats = analyze_images_parallel(
-<<<<<<< HEAD
         image_files,
-        max_workers=args.workers,
-        logger=logger,
-        show_progress=show_progress,
-        use_cache=use_cache
-    )
-
-    # Show cache stats if cache was used
-    if use_cache and cache_stats.cache_hits > 0:
-        logger.info(f"Cache: {cache_stats.cache_hits:,} hits, {cache_stats.cache_misses:,} misses "
-                   f"({cache_stats.hit_rate:.1f}% hit rate)")
-
-=======
-        image_files, 
         max_workers=args.workers,
         logger=logger,
         show_progress=show_progress,
         use_cache=use_cache,
     )
-    
+
     # Show cache stats
     if use_cache and cache_stats.cache_hits > 0:
         logger.info(
             f"Cache: {cache_stats.cache_hits:,} hits, {cache_stats.cache_misses:,} misses "
             f"({cache_stats.hit_rate:.1f}% hit rate)"
         )
-    
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
+
+
     # Filter out errors
     valid_images = [img for img in images if not img.error]
     error_count = len(images) - len(valid_images)
@@ -762,11 +711,7 @@ Platform Notes:
             start_id=len(exact_groups) + 1,
             show_progress=show_progress,
             use_lsh=use_lsh,
-<<<<<<< HEAD
-            logger=logger
-=======
             logger=logger,
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
         )
         logger.info(f"Found {len(perceptual_groups):,} perceptual duplicate groups")
     

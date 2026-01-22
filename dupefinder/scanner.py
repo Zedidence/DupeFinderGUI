@@ -135,11 +135,7 @@ def calculate_file_hash(filepath: str | Path, algorithm: str = 'sha256') -> str:
                 hasher.update(chunk)
         return hasher.hexdigest()
     except Exception as e:
-<<<<<<< HEAD
-        logging.debug(f"Failed to calculate hash for {filepath}: {e}")
-=======
         _logger.debug(f"File hash calculation failed for {filepath}: {e}")
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
         return ""
 
 
@@ -173,12 +169,8 @@ def calculate_perceptual_hash(filepath: str | Path, hash_size: int = 16) -> Opti
             phash = imagehash.phash(img, hash_size=hash_size)
             return str(phash)
     except Exception as e:
-<<<<<<< HEAD
-        logging.debug(f"Failed to calculate perceptual hash for {filepath}: {e}")
-=======
         # FIXED #4: Log perceptual hash failures instead of silently returning None
         _logger.debug(f"Perceptual hash calculation failed for {filepath}: {e}")
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
         return None
 
 
