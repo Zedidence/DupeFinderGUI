@@ -208,19 +208,29 @@ curl -X POST http://localhost:5000/api/cache/cleanup \
 ## Package Structure
 
 ```
-dupefinder/
-├── __init__.py      # Package exports
-├── __main__.py      # Entry point for python -m dupefinder
-├── config.py        # Configuration constants
-├── models.py        # ImageInfo and DuplicateGroup data classes
-├── scanner.py       # Core scanning and detection logic
-├── lsh.py           # Locality-Sensitive Hashing implementation
-├── database.py      # SQLite caching backend
-├── state.py         # Session state management
-├── routes.py        # Flask API routes
-├── app.py           # GUI application entry point
-├── cli.py           # Command-line interface
-├── index.html       # Web GUI template (embedded in package)
+DupeFinderGUI/
+├── dupefinder/
+│   ├── __init__.py      # Package exports
+│   ├── __main__.py      # Entry point for python -m dupefinder
+│   ├── config.py        # Configuration constants
+│   ├── user_config.py   # User configuration management
+│   ├── models.py        # ImageInfo and DuplicateGroup data classes
+│   ├── scanner.py       # Core scanning and detection logic
+│   ├── lsh.py           # Locality-Sensitive Hashing implementation
+│   ├── database.py      # SQLite caching backend
+│   ├── state.py         # Session state management
+│   ├── routes.py        # Flask API routes
+│   ├── app.py           # GUI application entry point
+│   ├── cli.py           # Command-line interface
+│   └── templates/
+│       └── index.html   # Web GUI template
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_models.py
+│   ├── test_scanner.py
+│   ├── test_lsh.py
+│   └── test_database.py
 ├── requirements.txt
 ├── setup.py
 └── README.md
@@ -376,9 +386,6 @@ GitHub Repository: [Zedidence/DupeFinderGUI](https://github.com/Zedidence/DupeFi
 
 ## Changelog
 
-<<<<<<< HEAD
-### v2.0.0 (Current)
-=======
 ### v2.1.0 (Current)
 - **HEIC/HEIF format support** via pillow-heif
 - Added `has_heif_support()` API function
@@ -386,9 +393,6 @@ GitHub Repository: [Zedidence/DupeFinderGUI](https://github.com/Zedidence/DupeFi
 - Graceful fallback when HEIC support not installed
 - Support for modern image formats (WebP, AVIF, JPEG XL)
 - Improved error handling for corrupt/truncated images
-
-### v1.2.0
->>>>>>> f8c4006cf8c5d119685f476d166eba4b77ed3780
 - **LSH acceleration for perceptual matching** - O(n) instead of O(n²)
 - **SQLite caching** for 10-100x faster re-scans
 - Auto-enables LSH for collections ≥5,000 images
@@ -400,6 +404,8 @@ GitHub Repository: [Zedidence/DupeFinderGUI](https://github.com/Zedidence/DupeFi
 - Formatted numbers (commas) for better readability
 - New `--lsh` and `--no-lsh` CLI options
 - Updated GUI to show LSH status
+- Added Python testing suite
+- Security and performance improvements
 
 ### v1.0.0
 - Initial release with GUI and CLI
