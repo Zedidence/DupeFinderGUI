@@ -1,1 +1,3 @@
 dupefinder/__pycache__/*
+dupefinder/tests/--__pycache__/*
+/dupefinder/.claude/*
