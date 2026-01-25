@@ -321,15 +321,15 @@ def estimate_comparison_reduction(
     # Each table has 2^bits_per_table possible buckets
     num_buckets = 2 ** bits_per_table
     expected_bucket_size = num_images / num_buckets
-    
-    # Expected collisions per item per table
-    expected_collisions_per_table = expected_bucket_size - 1
-    
+
+    # Expected collisions per item per table (must be non-negative)
+    expected_collisions_per_table = max(0, expected_bucket_size - 1)
+
     # Total expected candidates (with overlap across tables)
     # This is a rough estimate; actual depends on data distribution
     expected_candidates = min(
         num_images - 1,
-        expected_collisions_per_table * num_tables * 0.7  # Overlap factor
+        max(0, expected_collisions_per_table * num_tables * 0.7)  # Overlap factor
     )
     
     expected_comparisons = int(num_images * expected_candidates / 2)
