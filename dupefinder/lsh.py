@@ -21,7 +21,7 @@ For a collection of 650K images:
 import random
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional, Any
+from typing import Optional, Any, Iterator
 import logging
 
 
@@ -191,15 +191,18 @@ class HammingLSH:
     def get_all_candidate_pairs(self) -> set[tuple[int, int]]:
         """
         Get all pairs of indices that collided in at least one table.
-        
+
         More efficient than calling get_candidates for each item when
         you need to process all pairs.
-        
+
+        WARNING: This materializes all pairs in memory. For large collections,
+        use iter_candidate_pairs() instead to avoid memory exhaustion.
+
         Returns:
             Set of (i, j) tuples where i < j
         """
         pairs = set()
-        
+
         for table in self.tables:
             for bucket in table.values():
                 if len(bucket) > 1:
@@ -211,8 +214,53 @@ class HammingLSH:
                             if idx1 > idx2:
                                 idx1, idx2 = idx2, idx1
                             pairs.add((idx1, idx2))
-        
+
         return pairs
+
+    def iter_candidate_pairs(self) -> Iterator[tuple[int, int]]:
+        """
+        Iterate over candidate pairs without materializing them all in memory.
+
+        This is a memory-efficient alternative to get_all_candidate_pairs().
+        Pairs may be yielded multiple times if they collide in multiple tables.
+        The caller should handle deduplication if needed (e.g., via Union-Find
+        checking if items are already in the same group).
+
+        Yields:
+            Tuples of (i, j) where i < j, representing indices that collided
+            in at least one hash table bucket.
+        """
+        for table in self.tables:
+            for bucket in table.values():
+                if len(bucket) > 1:
+                    # All pairs within this bucket
+                    for i in range(len(bucket)):
+                        for j in range(i + 1, len(bucket)):
+                            idx1, idx2 = bucket[i], bucket[j]
+                            # Ensure consistent ordering
+                            if idx1 > idx2:
+                                idx1, idx2 = idx2, idx1
+                            yield (idx1, idx2)
+
+    def estimate_candidate_pairs(self) -> int:
+        """
+        Estimate the number of unique candidate pairs without materializing them.
+
+        This provides a rough estimate for progress reporting without the memory
+        cost of actually collecting all pairs. The estimate may be higher than
+        the actual unique count due to duplicates across tables.
+
+        Returns:
+            Estimated number of candidate pairs (upper bound).
+        """
+        total = 0
+        for table in self.tables:
+            for bucket in table.values():
+                bucket_size = len(bucket)
+                if bucket_size > 1:
+                    # Number of pairs in this bucket: n*(n-1)/2
+                    total += (bucket_size * (bucket_size - 1)) // 2
+        return total
     
     def clear(self) -> None:
         """Clear all data from the index."""

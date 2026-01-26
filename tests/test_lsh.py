@@ -87,6 +87,88 @@ class TestHammingLSH:
         for p in pairs:
             assert p[0] < p[1]
 
+    def test_iter_candidate_pairs(self):
+        """Test iterating over candidate pairs without materializing."""
+        lsh = HammingLSH(num_tables=10, bits_per_table=12, hash_bits=256)
+
+        # Create similar images
+        img = Image.new('RGB', (100, 100), color='red')
+        phash = imagehash.phash(img, hash_size=16)
+
+        lsh.add(0, phash)
+        lsh.add(1, phash)
+        lsh.add(2, phash)
+
+        # Collect pairs from iterator
+        pairs_from_iter = list(lsh.iter_candidate_pairs())
+
+        # Should yield pairs
+        assert len(pairs_from_iter) > 0
+
+        # All pairs should be tuples of (smaller_id, larger_id)
+        for p in pairs_from_iter:
+            assert p[0] < p[1]
+
+        # Unique pairs from iterator should match get_all_candidate_pairs
+        unique_pairs = set(pairs_from_iter)
+        all_pairs = lsh.get_all_candidate_pairs()
+        assert unique_pairs == all_pairs
+
+    def test_iter_candidate_pairs_may_have_duplicates(self):
+        """Test that iterator may yield duplicate pairs across tables."""
+        lsh = HammingLSH(num_tables=10, bits_per_table=12, hash_bits=256)
+
+        # Create identical images (will collide in all tables)
+        img = Image.new('RGB', (100, 100), color='blue')
+        phash = imagehash.phash(img, hash_size=16)
+
+        lsh.add(0, phash)
+        lsh.add(1, phash)
+
+        pairs_list = list(lsh.iter_candidate_pairs())
+        unique_pairs = set(pairs_list)
+
+        # With identical hashes colliding in all tables, we expect duplicates
+        # The list length should be >= unique count
+        assert len(pairs_list) >= len(unique_pairs)
+
+    def test_estimate_candidate_pairs(self):
+        """Test estimating candidate pairs count."""
+        lsh = HammingLSH(num_tables=10, bits_per_table=12, hash_bits=256)
+
+        # Create similar images
+        img = Image.new('RGB', (100, 100), color='red')
+        phash = imagehash.phash(img, hash_size=16)
+
+        lsh.add(0, phash)
+        lsh.add(1, phash)
+        lsh.add(2, phash)
+
+        estimated = lsh.estimate_candidate_pairs()
+        actual_from_iter = len(list(lsh.iter_candidate_pairs()))
+        unique_pairs = len(lsh.get_all_candidate_pairs())
+
+        # Estimate should match actual iterator count (both count with duplicates)
+        assert estimated == actual_from_iter
+
+        # Estimate should be >= unique pairs (may have duplicates across tables)
+        assert estimated >= unique_pairs
+
+    def test_estimate_candidate_pairs_empty(self):
+        """Test estimate with empty index."""
+        lsh = HammingLSH(num_tables=10, bits_per_table=12, hash_bits=256)
+        assert lsh.estimate_candidate_pairs() == 0
+
+    def test_estimate_candidate_pairs_single_item(self):
+        """Test estimate with single item (no pairs)."""
+        lsh = HammingLSH(num_tables=10, bits_per_table=12, hash_bits=256)
+
+        img = Image.new('RGB', (100, 100), color='red')
+        phash = imagehash.phash(img, hash_size=16)
+        lsh.add(0, phash)
+
+        assert lsh.estimate_candidate_pairs() == 0
+
     def test_clear(self):
         """Test clearing the index."""
         lsh = HammingLSH(num_tables=5, bits_per_table=8, hash_bits=64)

@@ -617,65 +617,85 @@ def _find_perceptual_duplicates_lsh(
     
     if pbar_build is not None:
         pbar_build.close()
-    
-    # Get all candidate pairs from LSH
-    candidate_pairs = lsh.get_all_candidate_pairs()
-    total_candidates = len(candidate_pairs)
-    
-    brute_force_comparisons = (n * (n - 1)) // 2
-    reduction = 1 - (total_candidates / max(1, brute_force_comparisons))
-    
-    if logger:
-        logger.info(
-            f"LSH reduced comparisons: {brute_force_comparisons:,} -> {total_candidates:,} "
-            f"({reduction:.1%} reduction)"
-        )
-    
-    # Union-Find for grouping
+
+    # Union-Find for grouping (defined early so we can use it for deduplication)
     parent = list(range(len(candidates)))
-    
+    rank = [0] * len(candidates)  # Union by rank for better performance
+
     def find(x: int) -> int:
         if parent[x] != x:
             parent[x] = find(parent[x])
         return parent[x]
-    
+
     def union(x: int, y: int) -> None:
         px, py = find(x), find(y)
         if px != py:
-            parent[px] = py
-    
-    # Compare only LSH candidates
+            # Union by rank
+            if rank[px] < rank[py]:
+                parent[px] = py
+            elif rank[px] > rank[py]:
+                parent[py] = px
+            else:
+                parent[py] = px
+                rank[px] += 1
+
+    # Estimate candidate pairs for progress reporting (without materializing)
+    estimated_candidates = lsh.estimate_candidate_pairs()
+    brute_force_comparisons = (n * (n - 1)) // 2
+
+    if logger:
+        estimated_reduction = 1 - (estimated_candidates / max(1, brute_force_comparisons))
+        logger.info(
+            f"LSH estimated comparisons: {brute_force_comparisons:,} -> ~{estimated_candidates:,} "
+            f"(~{estimated_reduction:.1%} reduction)"
+        )
+
+    # Compare only LSH candidates using memory-efficient iterator
+    # The iterator may yield duplicate pairs across tables, but we skip pairs
+    # that are already in the same Union-Find group for efficiency
     pbar: Optional[Any] = None
-    if HAS_TQDM and show_progress and total_candidates > 1000 and _tqdm_class is not None:
-        pbar = _tqdm_class(total=total_candidates, desc="Comparing candidates", unit="cmp", ncols=80)
-    
+    if HAS_TQDM and show_progress and estimated_candidates > 1000 and _tqdm_class is not None:
+        pbar = _tqdm_class(total=estimated_candidates, desc="Comparing candidates", unit="cmp", ncols=80)
+
     comparison_count = 0
+    actual_comparisons = 0
     matches_found = 0
-    
-    for i, j in candidate_pairs:
+
+    for i, j in lsh.iter_candidate_pairs():
+        comparison_count += 1
+
+        # Skip if already in the same group (handles duplicates across tables)
+        if find(i) == find(j):
+            if pbar is not None and comparison_count % 1000 == 0:
+                pbar.update(1000)
+            continue
+
         if parsed_hashes[i] is not None and parsed_hashes[j] is not None:
             distance = parsed_hashes[i] - parsed_hashes[j]
-            
+            actual_comparisons += 1
+
             if distance <= threshold:
                 union(i, j)
                 matches_found += 1
-        
-        comparison_count += 1
+
         if pbar is not None and comparison_count % 1000 == 0:
             pbar.update(1000)
         if progress_callback and comparison_count % 10000 == 0:
             # Report progress relative to candidate pairs, not brute force
-            progress_callback(comparison_count, total_candidates)
+            progress_callback(comparison_count, estimated_candidates)
     
     if pbar is not None:
         # Update remaining
-        remaining = total_candidates - (comparison_count // 1000) * 1000
+        remaining = comparison_count % 1000
         if remaining > 0:
             pbar.update(remaining)
         pbar.close()
-    
+
     if logger:
-        logger.info(f"Found {matches_found:,} matching pairs")
+        logger.info(
+            f"Found {matches_found:,} matching pairs "
+            f"({actual_comparisons:,} actual comparisons, {comparison_count - actual_comparisons:,} skipped as already grouped)"
+        )
     
     # Collect groups
     return _collect_duplicate_groups(candidates, parent, start_id)
