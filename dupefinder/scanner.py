@@ -10,6 +10,7 @@ This module contains all the core functionality for:
 
 import hashlib
 import os
+import time
 import warnings
 import logging
 from pathlib import Path
@@ -81,40 +82,38 @@ except ImportError:
 def find_image_files(root_path: str | Path, recursive: bool = True) -> list[str]:
     """
     Find all image files in the given directory.
-    
+
     Args:
         root_path: Directory to scan
         recursive: If True, scan subdirectories
-        
+
     Returns:
         List of absolute paths to image files
     """
     root = Path(root_path)
-    images = []
-    
+
     # Filter out HEIC extensions if support not available
     extensions_to_scan = IMAGE_EXTENSIONS
     if not HAS_HEIF_SUPPORT:
         extensions_to_scan = {ext for ext in IMAGE_EXTENSIONS if ext not in {'.heic', '.heif'}}
-    
-    for ext in extensions_to_scan:
-        if recursive:
-            images.extend(root.rglob(f'*{ext}'))
-            images.extend(root.rglob(f'*{ext.upper()}'))
-        else:
-            images.extend(root.glob(f'*{ext}'))
-            images.extend(root.glob(f'*{ext.upper()}'))
-    
-    # Remove duplicates (case sensitivity issues on some filesystems)
+
+    # Single traversal with case-insensitive extension matching
+    # This is much faster than calling rglob once per extension
+    images = []
     seen = set()
-    unique = []
-    for img in images:
-        resolved = str(img.resolve())
-        if resolved not in seen:
-            seen.add(resolved)
-            unique.append(resolved)
-    
-    return unique
+
+    iterator = root.rglob('*') if recursive else root.glob('*')
+
+    for filepath in iterator:
+        if filepath.is_file():
+            ext_lower = filepath.suffix.lower()
+            if ext_lower in extensions_to_scan:
+                resolved = str(filepath.resolve())
+                if resolved not in seen:
+                    seen.add(resolved)
+                    images.append(resolved)
+
+    return images
 
 
 def calculate_file_hash(filepath: str | Path, algorithm: str = 'sha256') -> str:
@@ -219,34 +218,40 @@ def calculate_quality_score(info: ImageInfo) -> float:
     return score
 
 
-def analyze_image(filepath: str | Path, calculate_phash: bool = True) -> ImageInfo:
+def analyze_image(
+    filepath: str | Path,
+    calculate_phash: bool = True,
+    calculate_hash: bool = True,
+) -> ImageInfo:
     """
     Analyze an image file and extract metadata.
-    
+
     Args:
         filepath: Path to the image file
         calculate_phash: Whether to compute perceptual hash
-        
+        calculate_hash: Whether to compute file hash (SHA-256)
+
     Returns:
         ImageInfo object with all extracted metadata
     """
     filepath = str(filepath)
     info = ImageInfo(path=filepath)
-    
+
     try:
         # File size - check file exists and is accessible first
         if not os.path.exists(filepath):
             info.error = "File not found"
             return info
-        
+
         if not os.access(filepath, os.R_OK):
             info.error = "File not readable (permission denied)"
             return info
-        
+
         info.file_size = os.path.getsize(filepath)
-        
-        # Calculate file hash
-        info.file_hash = calculate_file_hash(filepath)
+
+        # Calculate file hash (only if needed for exact duplicate detection)
+        if calculate_hash:
+            info.file_hash = calculate_file_hash(filepath)
         
         # Check for HEIC without support
         ext = os.path.splitext(filepath)[1].lower()
@@ -309,10 +314,11 @@ def analyze_images_parallel(
     show_progress: bool = True,
     logger: Optional[logging.Logger] = None,
     use_cache: bool = True,
+    calculate_hash: bool = True,
 ) -> tuple[list[ImageInfo], CacheStats]:
     """
     Analyze multiple images in parallel with optional caching.
-    
+
     Args:
         filepaths: List of image paths to analyze
         max_workers: Number of parallel workers
@@ -320,7 +326,8 @@ def analyze_images_parallel(
         show_progress: Whether to show tqdm progress bar
         logger: Optional logger for status messages
         use_cache: Whether to use SQLite caching
-        
+        calculate_hash: Whether to compute file hash (for exact duplicate detection)
+
     Returns:
         Tuple of (list of ImageInfo objects, CacheStats)
     """
@@ -366,13 +373,18 @@ def analyze_images_parallel(
             )
         
         newly_analyzed: list[ImageInfo] = []
-        
+
+        # Batch progress callbacks to reduce overhead (every 1000 files or 1 second)
+        last_callback_time = time.time()
+        callback_batch_size = 1000
+        callback_interval = 1.0  # seconds
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(analyze_image, path): path 
+                executor.submit(analyze_image, path, True, calculate_hash): path
                 for path in to_analyze
             }
-            
+
             for i, future in enumerate(as_completed(futures)):
                 try:
                     info = future.result()
@@ -383,13 +395,21 @@ def analyze_images_parallel(
                     info = ImageInfo(path=filepath, error=str(e))
                     results.append(info)
                     newly_analyzed.append(info)
-                
+
                 if pbar is not None:
                     pbar.update(1)
-                
+
+                # Batch progress callbacks to reduce overhead
                 if progress_callback:
-                    # Report progress including cached results
-                    progress_callback(stats.cache_hits + i + 1, len(filepaths))
+                    current_time = time.time()
+                    should_callback = (
+                        (i + 1) % callback_batch_size == 0 or
+                        current_time - last_callback_time >= callback_interval or
+                        i == len(to_analyze) - 1  # Always callback on last item
+                    )
+                    if should_callback:
+                        progress_callback(stats.cache_hits + i + 1, len(filepaths))
+                        last_callback_time = current_time
         
         if pbar is not None:
             pbar.close()
