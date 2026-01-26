@@ -450,6 +450,7 @@ GitHub Repository: [Zedidence/DupeFinderGUI](https://github.com/Zedidence/DupeFi
 - **Single-pass file discovery**: 20-30% faster directory scanning by using one traversal instead of 48+
 - **Batched progress callbacks**: 10-15% faster analysis by reducing threading overhead
 - **Optional file hashing**: New `calculate_hash` parameter to skip SHA-256 when not needed (10-20% faster for perceptual-only scans)
+- **Fixed SQLite variable limit error**: Cache queries now chunked to handle 50K+ file collections without "too many SQL variables" errors
 - Added `iter_candidate_pairs()` generator method to `HammingLSH` class
 - Added `estimate_candidate_pairs()` method for progress reporting without memory overhead
 

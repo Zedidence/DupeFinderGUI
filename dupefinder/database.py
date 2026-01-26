@@ -365,15 +365,19 @@ class ImageCache:
     def get_batch(self, filepaths: list[str]) -> dict[str, Optional[ImageInfo]]:
         """
         Get cached info for multiple files efficiently.
-        
+
         Args:
             filepaths: List of file paths
-            
+
         Returns:
             Dict mapping filepath to ImageInfo (or None if not cached)
         """
-        results = {fp: None for fp in filepaths}
-        
+        results: dict[str, Optional[ImageInfo]] = {fp: None for fp in filepaths}
+
+        # SQLite has a limit on SQL variables (typically 999)
+        # Chunk queries to stay well under the limit
+        CHUNK_SIZE = 500
+
         try:
             # Build cache keys for files that exist
             cache_keys = {}
@@ -384,43 +388,50 @@ class ImageCache:
                         cache_keys[self._make_cache_key(fp, mtime, size)] = fp
                 except Exception:
                     continue
-            
+
             if not cache_keys:
                 return results
-            
-            # Query all at once (read operation)
-            placeholders = ','.join('?' * len(cache_keys))
+
+            # Process in chunks to avoid SQLite variable limit
+            cache_key_list = list(cache_keys.keys())
+            all_hit_keys = []
+
             with self._conn(exclusive=False) as conn:
-                rows = conn.execute(f"""
-                    SELECT * FROM images WHERE cache_key IN ({placeholders})
-                """, list(cache_keys.keys())).fetchall()
-                
-                for row in rows:
-                    filepath = cache_keys.get(row['cache_key'])
-                    if filepath:
-                        results[filepath] = ImageInfo(
-                            path=row['path'],
-                            file_size=row['file_size'],
-                            width=row['width'] or 0,
-                            height=row['height'] or 0,
-                            pixel_count=row['pixel_count'] or 0,
-                            bit_depth=row['bit_depth'] or 0,
-                            format=row['format'] or "",
-                            file_hash=row['file_hash'] or "",
-                            perceptual_hash=row['perceptual_hash'] or "",
-                            quality_score=row['quality_score'] or 0.0,
-                            error=row['error'],
-                        )
-                
-                # Update last accessed for cache hits
-                if rows:
-                    hit_keys = [row['cache_key'] for row in rows]
-                    placeholders = ','.join('?' * len(hit_keys))
+                for i in range(0, len(cache_key_list), CHUNK_SIZE):
+                    chunk = cache_key_list[i:i + CHUNK_SIZE]
+                    placeholders = ','.join('?' * len(chunk))
+
+                    rows = conn.execute(f"""
+                        SELECT * FROM images WHERE cache_key IN ({placeholders})
+                    """, chunk).fetchall()
+
+                    for row in rows:
+                        filepath = cache_keys.get(row['cache_key'])
+                        if filepath is not None:
+                            results[filepath] = ImageInfo(
+                                path=row['path'],
+                                file_size=row['file_size'],
+                                width=row['width'] or 0,
+                                height=row['height'] or 0,
+                                pixel_count=row['pixel_count'] or 0,
+                                bit_depth=row['bit_depth'] or 0,
+                                format=row['format'] or "",
+                                file_hash=row['file_hash'] or "",
+                                perceptual_hash=row['perceptual_hash'] or "",
+                                quality_score=row['quality_score'] or 0.0,
+                                error=row['error'],
+                            )
+                            all_hit_keys.append(row['cache_key'])
+
+                # Update last accessed for cache hits (also in chunks)
+                for i in range(0, len(all_hit_keys), CHUNK_SIZE):
+                    chunk = all_hit_keys[i:i + CHUNK_SIZE]
+                    placeholders = ','.join('?' * len(chunk))
                     conn.execute(f"""
                         UPDATE images SET last_accessed = strftime('%s', 'now')
                         WHERE cache_key IN ({placeholders})
-                    """, hit_keys)
-        
+                    """, chunk)
+
         except Exception as e:
             logger.warning(f"Error during batch retrieval: {e}")
 
@@ -471,17 +482,22 @@ class ImageCache:
         Returns:
             Number of entries removed
         """
+        # SQLite has a limit on SQL variables (typically 999)
+        CHUNK_SIZE = 500
+
         try:
             with self._conn(exclusive=True) as conn:
                 # Get all paths
                 rows = conn.execute("SELECT path FROM images").fetchall()
                 missing = [row['path'] for row in rows if not os.path.exists(row['path'])]
 
-                if missing:
-                    placeholders = ','.join('?' * len(missing))
+                # Delete in chunks to avoid SQLite variable limit
+                for i in range(0, len(missing), CHUNK_SIZE):
+                    chunk = missing[i:i + CHUNK_SIZE]
+                    placeholders = ','.join('?' * len(chunk))
                     conn.execute(
                         f"DELETE FROM images WHERE path IN ({placeholders})",
-                        missing
+                        chunk
                     )
 
                 return len(missing)
