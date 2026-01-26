@@ -13,6 +13,7 @@ import time
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from flask import Blueprint, jsonify, request, send_file, render_template
 
@@ -130,18 +131,18 @@ def _apply_auto_selection(groups: list[DuplicateGroup], strategy: str) -> dict[s
             sorted_images = sorted(group.images, key=lambda x: x.file_size)
         elif strategy == 'newest':
             # Sort by mtime (newest first)
-            def get_mtime(img):
+            def get_mtime(img: Any) -> float:
                 try:
                     return os.path.getmtime(img.path)
-                except:
+                except OSError:
                     return 0
             sorted_images = sorted(group.images, key=lambda x: -get_mtime(x))
         elif strategy == 'oldest':
             # Sort by mtime (oldest first)
-            def get_mtime(img):
+            def get_mtime(img: Any) -> float:
                 try:
                     return os.path.getmtime(img.path)
-                except:
+                except OSError:
                     return float('inf')
             sorted_images = sorted(group.images, key=lambda x: get_mtime(x))
         else:
@@ -808,7 +809,7 @@ def api_delete():
             error_details.append({'path': filepath, 'error': str(e)})
             _logger.exception(f"Unexpected error moving {filepath}: {e}")
     
-    response = {'moved': moved, 'errors': errors}
+    response: dict[str, Any] = {'moved': moved, 'errors': errors}
     if error_details:
         response['error_details'] = error_details
     
