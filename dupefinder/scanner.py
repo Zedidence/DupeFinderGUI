@@ -8,6 +8,8 @@ This module contains all the core functionality for:
 - Detecting exact and perceptual duplicates
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 import time

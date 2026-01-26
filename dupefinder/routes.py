@@ -4,6 +4,8 @@ Flask routes for Duplicate Image Finder GUI.
 Contains all API endpoints for the web interface.
 """
 
+from __future__ import annotations
+
 import os
 import shutil
 import threading
