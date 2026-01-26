@@ -1,3 +1,4 @@
 dupefinder/__pycache__/*
 dupefinder/tests/__pycache__/*
 /dupefinder/.claude/*
+tests/__pycache__/test_lsh.cpython-313-pytest-9.0.2.pyc
