@@ -79,9 +79,13 @@ class ImageCache:
     
     def _ensure_directory(self):
         """Ensure the directory for the database file exists."""
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir:
-            os.makedirs(db_dir, exist_ok=True)
+        # Use Path for more robust cross-platform handling
+        db_path = Path(self.db_path).resolve()
+        db_dir = db_path.parent
+
+        # Only create directory if it doesn't exist and has a parent path
+        if db_dir and db_dir != db_path:
+            db_dir.mkdir(parents=True, exist_ok=True)
     
     @contextmanager
     def _conn(self, exclusive: bool = False) -> Generator[sqlite3.Connection, None, None]:
