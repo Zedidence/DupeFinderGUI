@@ -2,3 +2,17 @@ dupefinder/__pycache__/*
 dupefinder/tests/__pycache__/*
 /dupefinder/.claude/*
 tests/__pycache__/test_lsh.cpython-313-pytest-9.0.2.pyc
+.claude/settings.local.json
+dupefinder/api/__pycache__/__init__.cpython-313.pyc
+dupefinder/api/__pycache__/orchestrator.cpython-313.pyc
+dupefinder/api/__pycache__/routes.cpython-313.pyc
+dupefinder/utils/__pycache__/__init__.cpython-313.pyc
+dupefinder/utils/__pycache__/formatters.cpython-313.pyc
+dupefinder/utils/__pycache__/selection.cpython-313.pyc
+dupefinder/utils/__pycache__/validators.cpython-313.pyc
+tests/__pycache__/__init__.cpython-313.pyc
+tests/__pycache__/conftest.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_database.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_lsh.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_models.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_scanner.cpython-313-pytest-9.0.2.pyc

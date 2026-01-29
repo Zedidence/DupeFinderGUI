@@ -26,7 +26,7 @@ import logging
 
 from flask import Flask
 
-from .routes import api
+from .api import api
 from .state import scan_state
 
 
