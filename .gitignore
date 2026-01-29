@@ -16,3 +16,10 @@ tests/__pycache__/test_database.cpython-313-pytest-9.0.2.pyc
 tests/__pycache__/test_lsh.cpython-313-pytest-9.0.2.pyc
 tests/__pycache__/test_models.cpython-313-pytest-9.0.2.pyc
 tests/__pycache__/test_scanner.cpython-313-pytest-9.0.2.pyc
+.claude/settings.local.json
+tests/__pycache__/__init__.cpython-313.pyc
+tests/__pycache__/conftest.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_database.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_lsh.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_models.cpython-313-pytest-9.0.2.pyc
+tests/__pycache__/test_scanner.cpython-313-pytest-9.0.2.pyc
