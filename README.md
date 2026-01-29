@@ -263,9 +263,17 @@ DupeFinderGUI/
 │   ├── lsh.py           # Locality-Sensitive Hashing implementation
 │   ├── database.py      # SQLite caching backend
 │   ├── state.py         # Session state management
-│   ├── routes.py        # Flask API routes
 │   ├── app.py           # GUI application entry point
 │   ├── cli.py           # Command-line interface
+│   ├── api/             # Web API package
+│   │   ├── __init__.py      # Exports Flask blueprint
+│   │   ├── routes.py        # Flask API endpoints
+│   │   └── orchestrator.py  # Scan orchestration and progress tracking
+│   ├── utils/           # Shared utilities package
+│   │   ├── __init__.py      # Exports utilities
+│   │   ├── formatters.py    # Number and time formatting
+│   │   ├── validators.py    # Input validation and security checks
+│   │   └── selection.py     # Duplicate selection strategies
 │   └── templates/
 │       └── index.html   # Web GUI template
 ├── tests/
