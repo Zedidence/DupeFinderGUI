@@ -259,12 +259,19 @@ DupeFinderGUI/
 │   ├── config.py        # Configuration constants
 │   ├── user_config.py   # User configuration management
 │   ├── models.py        # ImageInfo and DuplicateGroup data classes
-│   ├── scanner.py       # Core scanning and detection logic
 │   ├── lsh.py           # Locality-Sensitive Hashing implementation
 │   ├── database.py      # SQLite caching backend
 │   ├── state.py         # Session state management
 │   ├── app.py           # GUI application entry point
 │   ├── cli.py           # Command-line interface
+│   ├── scanner/         # Core scanning and detection package
+│   │   ├── __init__.py          # Public API exports
+│   │   ├── dependencies.py      # PIL/imagehash/tqdm initialization
+│   │   ├── file_discovery.py    # File finding and enumeration
+│   │   ├── hashing.py           # Hash and quality score calculation
+│   │   ├── analysis.py          # Single image analysis
+│   │   ├── parallel.py          # Parallel image processing
+│   │   └── deduplication.py     # Duplicate detection algorithms
 │   ├── api/             # Web API package
 │   │   ├── __init__.py      # Exports Flask blueprint
 │   │   ├── routes.py        # Flask API endpoints
