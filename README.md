@@ -260,7 +260,14 @@ DupeFinderGUI/
 │   ├── user_config.py   # User configuration management
 │   ├── models.py        # ImageInfo and DuplicateGroup data classes
 │   ├── lsh.py           # Locality-Sensitive Hashing implementation
-│   ├── database.py      # SQLite caching backend
+│   ├── database/        # SQLite caching backend package
+│   │   ├── __init__.py          # Public API exports and singleton pattern
+│   │   ├── utils.py             # Shared utilities (CacheStats dataclass)
+│   │   ├── connection.py        # Thread-safe connection management
+│   │   ├── schema.py            # Schema initialization and migrations
+│   │   ├── operations.py        # CRUD operations (get, put, batch)
+│   │   ├── maintenance.py       # Cleanup, statistics, vacuum operations
+│   │   └── core.py              # ImageCache facade class
 │   ├── state.py         # Session state management
 │   ├── app.py           # GUI application entry point
 │   ├── scanner/         # Core scanning and detection package
