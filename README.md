@@ -263,7 +263,6 @@ DupeFinderGUI/
 │   ├── database.py      # SQLite caching backend
 │   ├── state.py         # Session state management
 │   ├── app.py           # GUI application entry point
-│   ├── cli.py           # Command-line interface
 │   ├── scanner/         # Core scanning and detection package
 │   │   ├── __init__.py          # Public API exports
 │   │   ├── dependencies.py      # PIL/imagehash/tqdm initialization
@@ -272,6 +271,13 @@ DupeFinderGUI/
 │   │   ├── analysis.py          # Single image analysis
 │   │   ├── parallel.py          # Parallel image processing
 │   │   └── deduplication.py     # Duplicate detection algorithms
+│   ├── cli/             # Command-line interface package
+│   │   ├── __init__.py          # Public API exports
+│   │   ├── arg_parser.py        # Argument parsing
+│   │   ├── interactive.py       # Interactive prompts
+│   │   ├── reporting.py         # Report formatting
+│   │   ├── actions.py           # Duplicate handling actions
+│   │   └── orchestrator.py      # CLI workflow orchestration
 │   ├── api/             # Web API package
 │   │   ├── __init__.py      # Exports Flask blueprint
 │   │   ├── routes.py        # Flask API endpoints
@@ -280,7 +286,9 @@ DupeFinderGUI/
 │   │   ├── __init__.py      # Exports utilities
 │   │   ├── formatters.py    # Number and time formatting
 │   │   ├── validators.py    # Input validation and security checks
-│   │   └── selection.py     # Duplicate selection strategies
+│   │   ├── selection.py     # Duplicate selection strategies
+│   │   ├── platform.py      # Platform-specific capability checks
+│   │   └── exporters.py     # Export results to files
 │   └── templates/
 │       └── index.html   # Web GUI template
 ├── tests/
